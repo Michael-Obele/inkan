@@ -1,0 +1,19 @@
+node_modules/
+.env
+.env.*
+!.env.example
+
+# build output
+.svelte-kit/
+build/
+dist/
+
+# agent scratch, never tracked
+.superpowers/
+.scratch/
+
+*.log
+.DS_Store
+
+docs
+spike
