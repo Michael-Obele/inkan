@@ -1,0 +1,85 @@
+{
+    "recordedAt": "2026-11-06T12:35:08.966Z",
+    "entries": [
+        {
+            "step": "createBareOrder",
+            "ok": true,
+            "value": {
+                "orderId": "0AD38725DR985874H",
+                "status": "CREATED",
+                "earlyAuthorizationId": null,
+                "earlyCaptureId": null
+            }
+        },
+        {
+            "step": "getOrder",
+            "ok": true,
+            "value": {
+                "orderId": "0AD38725DR985874H",
+                "status": "CREATED",
+                "payee": {
+                    "merchantId": "8NJ2CK2C6DN3S",
+                    "emailAddress": "sb-vlfi653657170@business.example.com"
+                },
+                "authorizationId": null,
+                "authorizationStatus": null,
+                "captureId": null
+            }
+        },
+        {
+            "step": "confirmPaymentSource",
+            "ok": true,
+            "value": {
+                "orderId": "0AD38725DR985874H",
+                "status": "APPROVED",
+                "payee": null,
+                "authorizationId": null,
+                "authorizationStatus": null,
+                "captureId": null
+            }
+        },
+        {
+            "step": "authorizeOrder",
+            "ok": true,
+            "value": {
+                "orderId": "0AD38725DR985874H",
+                "status": "COMPLETED",
+                "payee": null,
+                "authorizationId": "8R1098960X556673M",
+                "authorizationStatus": "CREATED",
+                "captureId": null
+            }
+        },
+        {
+            "step": "getOrder",
+            "ok": true,
+            "value": {
+                "orderId": "0AD38725DR985874H",
+                "status": "COMPLETED",
+                "payee": {
+                    "merchantId": "8NJ2CK2C6DN3S",
+                    "emailAddress": "sb-vlfi653657170@business.example.com"
+                },
+                "authorizationId": "8R1098960X556673M",
+                "authorizationStatus": "CREATED",
+                "captureId": null
+            }
+        },
+        {
+            "step": "captureAuthorization",
+            "ok": true,
+            "value": {
+                "captureId": "7YF78146SX507162L",
+                "status": "COMPLETED"
+            }
+        },
+        {
+            "step": "refundCapture",
+            "ok": true,
+            "value": {
+                "refundId": "5FN93284PJ193353S",
+                "status": "COMPLETED"
+            }
+        }
+    ]
+}
