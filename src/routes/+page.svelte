@@ -262,8 +262,8 @@
 				<p class="figure text-[0.8125rem] text-destructive">over_per_txn_cap</p>
 				<p class="measure text-[0.9375rem] leading-relaxed">
 					The order is created bare, with no card attached, so a refusal has nothing to release. It
-					also costs nothing and returns in under a millisecond, because no model is anywhere near
-					the decision, and it is written down like every other attempt.
+					also costs nothing and returns immediately, because no model is anywhere near the
+					decision, and it is written down like every other attempt.
 				</p>
 			</div>
 
@@ -324,7 +324,8 @@
 	<!-- Close. One action, and what happens when you take it. -->
 	<section class="flex flex-col gap-6 py-16 ruled sm:py-20">
 		<h2 class="max-w-3xl font-heading text-3xl leading-tight tracking-tight sm:text-4xl">
-			Four clicks shows the whole story: a payment, an escalation, two refusals, and a refund.
+			One button runs the whole story: a payment, an escalation, two refusals, and a refund you can
+			issue yourself.
 		</h2>
 		<p class="measure text-[0.9375rem] leading-relaxed text-muted-foreground">
 			No keys, no database and no network. The recorded run replays answers PayPal actually gave, so
