@@ -39,7 +39,7 @@
 <main class="mx-auto w-full max-w-xl px-5 pt-8 pb-24">
 	<a
 		class="inline-flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase hover:text-foreground"
-		href="/"
+		href="/allowance"
 	>
 		<ArrowLeft class="size-3.5" />
 		The allowance
@@ -64,7 +64,7 @@
 	<Card.Root class="mt-8">
 		<Card.Header>
 			<Card.Description>It asked for exactly this</Card.Description>
-			<p class="tabular font-mono text-5xl tracking-tight">{formatMoney(data.request.amount)}</p>
+			<p class="font-mono text-5xl tracking-tight tabular">{formatMoney(data.request.amount)}</p>
 			<Card.Description>
 				at {data.request.merchantEmail ?? data.request.merchantId ?? 'the shop'}
 			</Card.Description>
@@ -82,7 +82,7 @@
 					<p class="text-[0.625rem] font-semibold tracking-[0.16em] text-warning uppercase">
 						This repeats, so the real cost is
 					</p>
-					<p class="tabular font-mono text-2xl">
+					<p class="font-mono text-2xl tabular">
 						{formatMoney(data.monthly.perMonth)} a month
 					</p>
 					<p class="text-sm text-muted-foreground">
@@ -92,9 +92,7 @@
 			{/if}
 
 			<div class="flex flex-col gap-2">
-				<p class="text-[0.625rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-					Why you are being asked
-				</p>
+				<p class="eyebrow">Why you are being asked</p>
 				<p class="text-sm text-pretty">{data.explanation}</p>
 			</div>
 
@@ -103,19 +101,19 @@
 			<dl class="flex flex-col text-sm">
 				<div class="flex items-baseline justify-between gap-4 py-1.5">
 					<dt class="text-muted-foreground">Allowance ceiling</dt>
-					<dd class="tabular font-mono">{formatMoney(data.mandate.ceiling)}</dd>
+					<dd class="font-mono tabular">{formatMoney(data.mandate.ceiling)}</dd>
 				</div>
 				<div class="flex items-baseline justify-between gap-4 py-1.5">
 					<dt class="text-muted-foreground">Already committed</dt>
-					<dd class="tabular font-mono">{formatMoney(data.mandate.committed)}</dd>
+					<dd class="font-mono tabular">{formatMoney(data.mandate.committed)}</dd>
 				</div>
 				<div class="flex items-baseline justify-between gap-4 py-1.5">
 					<dt class="text-muted-foreground">Left after this</dt>
-					<dd class="tabular font-mono">{formatMoney(data.mandate.remainingAfterThis)}</dd>
+					<dd class="font-mono tabular">{formatMoney(data.mandate.remainingAfterThis)}</dd>
 				</div>
 				<div class="flex items-baseline justify-between gap-4 py-1.5">
 					<dt class="text-muted-foreground">Goes through without asking</dt>
-					<dd class="tabular font-mono">{formatMoney(data.mandate.autoApproveAmount)}</dd>
+					<dd class="font-mono tabular">{formatMoney(data.mandate.autoApproveAmount)}</dd>
 				</div>
 			</dl>
 

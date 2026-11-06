@@ -45,7 +45,7 @@
 	<header class="-mx-5 flex flex-col gap-4 border-b border-border bg-muted/40 px-5 pb-10">
 		<div class="flex items-center gap-2 text-muted-foreground">
 			<Receipt class="size-4" />
-			<span class="text-[0.6875rem] font-semibold tracking-[0.18em] uppercase">The ledger</span>
+			<span class="eyebrow">The ledger</span>
 		</div>
 
 		<h1
@@ -68,22 +68,16 @@
 
 	<div class="mt-8 grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-3">
 		<div class="bg-background p-5">
-			<p class="text-[0.625rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-				Paid out
-			</p>
-			<p class="tabular mt-2 font-mono text-2xl">{formatMoney(data.captured)}</p>
+			<p class="eyebrow">Paid out</p>
+			<p class="mt-2 font-mono text-2xl tabular">{formatMoney(data.captured)}</p>
 		</div>
 		<div class="bg-background p-5">
-			<p class="text-[0.625rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-				Refunded
-			</p>
-			<p class="tabular mt-2 font-mono text-2xl">{formatMoney(data.refunded)}</p>
+			<p class="eyebrow">Refunded</p>
+			<p class="mt-2 font-mono text-2xl tabular">{formatMoney(data.refunded)}</p>
 		</div>
 		<div class="bg-background p-5">
-			<p class="text-[0.625rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-				Net committed
-			</p>
-			<p class="tabular mt-2 font-mono text-2xl">
+			<p class="eyebrow">Net committed</p>
+			<p class="mt-2 font-mono text-2xl tabular">
 				{formatMoney({ cents: spent, currency: data.captured.currency })}
 			</p>
 		</div>
@@ -146,7 +140,7 @@
 									</p>
 								{/if}
 							</Table.Cell>
-							<Table.Cell class="tabular text-right font-mono whitespace-nowrap">
+							<Table.Cell class="text-right font-mono whitespace-nowrap tabular">
 								{formatMoney(row.amount)}
 							</Table.Cell>
 							<Table.Cell class="text-xs">

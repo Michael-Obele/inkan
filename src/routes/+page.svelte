@@ -1,399 +1,341 @@
 <script lang="ts">
-	import {
-		ArrowRight,
-		CircleCheck,
-		Clock,
-		ExternalLink,
-		Play,
-		Receipt,
-		ShieldX,
-		Store,
-		Wallet
-	} from '@lucide/svelte';
+	import { ArrowRight, ArrowUpRight } from '@lucide/svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Card from '#lib/components/ui/card/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
+	import Seal from '#lib/components/seal.svelte';
 	import StatusPill from '#lib/components/status-pill.svelte';
 	import { formatMoney } from '#lib/money';
 	import { ledgerLabel, ledgerTone } from '#lib/ledger-labels';
-	import { getAllowance, lowerCeiling, stopAgent } from '#lib/remote';
+	import { getAllowance } from '#lib/remote';
 
 	const data = $derived(await getAllowance());
 
-	let busy = $state(false);
-	let confirming = $state(false);
-	let note = $state<string | null>(null);
-	let error = $state<string | null>(null);
-
-	// Follows the server value until the person edits it, then stops.
-	let ceilingInput = $state<string | null>(null);
-
-	const revoked = $derived(data.mandate.status === 'revoked');
-	const remaining = $derived(data.mandate.ceiling.cents - data.spent.cents);
-	const usedPercent = $derived(
-		data.mandate.ceiling.cents === 0
-			? 0
-			: Math.min(100, Math.round((data.spent.cents / data.mandate.ceiling.cents) * 100))
-	);
-	const ceilingValue = $derived(ceilingInput ?? (data.mandate.ceiling.cents / 100).toFixed(2));
-
-	const rules = $derived([
-		{ label: 'For', value: data.mandate.purpose, mono: false },
-		{ label: 'Only at', value: data.storeSlug, mono: true },
-		{ label: 'Good until', value: data.mandate.expiresAt.slice(0, 10), mono: true },
-		{ label: 'Ceiling', value: formatMoney(data.mandate.ceiling), mono: true },
-		{ label: 'One purchase', value: formatMoney(data.mandate.perTransactionCap), mono: true },
-		{ label: 'Without asking', value: formatMoney(data.mandate.autoApproveAmount), mono: true }
-	]);
-
-	async function saveCeiling() {
-		const cents = Math.round(Number.parseFloat(ceilingValue) * 100);
-		if (!Number.isFinite(cents) || cents <= 0) {
-			error = 'Enter an amount in dollars, like 80.00.';
-			return;
+	const steps = [
+		{
+			n: '01',
+			title: 'The agent asks, holding nothing',
+			body: 'It names a shop and an amount in dollars. It has no PayPal client id, no secret, and no card. The runner refuses to start if it can see one.'
+		},
+		{
+			n: '02',
+			title: 'The service resolves the merchant itself',
+			body: 'A handle becomes a merchant id only through a registry the caller cannot reach. Then nine rules run in a fixed order, and the first one that answers decides.'
+		},
+		{
+			n: '03',
+			title: 'Money moves through a hold, never a guess',
+			body: 'A bare order is created with no card. PayPal reports the payee. If it matches, a single-use capability is spent on one amount and one merchant, and only then is it captured.'
+		},
+		{
+			n: '04',
+			title: 'You keep the off switch',
+			body: 'What the rules will not allow waits for a person. Revoking a mandate burns the live capability, so the next attempt fails because the permission is gone, not because a flag flipped.'
 		}
-		if (cents >= data.mandate.ceiling.cents) {
-			error = `That is not lower than the ceiling of ${formatMoney(data.mandate.ceiling)}. Narrowing only removes room to spend.`;
-			return;
-		}
+	];
 
-		busy = true;
-		error = null;
-		note = null;
-		try {
-			const result = await lowerCeiling({ ceilingCents: cents });
-			if (!result.ok) {
-				error = result.error;
-				return;
-			}
-			note = `Ceiling lowered to ${formatMoney({ cents, currency: data.mandate.ceiling.currency })}. The ledger records the change.`;
-			ceilingInput = null;
-		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'the service did not answer';
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function revoke() {
-		busy = true;
-		error = null;
-		note = null;
-		try {
-			const result = await stopAgent();
-			if (!result.ok) {
-				error = result.error;
-				return;
-			}
-			note = `Stopped. ${result.liveCapabilitiesKilled} live capability killed.`;
-			confirming = false;
-		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'the service did not answer';
-		} finally {
-			busy = false;
-		}
-	}
+	const limits = [
+		'No authentication on the approval link. The id is random, and it is still not a secret.',
+		'No notifications. A request waits, and nothing tells you until you open the screen.',
+		'One merchant, one currency, one agent, one person. This is a demonstration of a mechanism.',
+		'Sandbox only. No real money moves, and no real card should ever be entered.'
+	];
 
 	function when(iso: string): string {
-		return iso.slice(5, 16).replace('T', ' ');
+		return `${iso.slice(5, 10)} ${iso.slice(11, 16)}`;
 	}
 </script>
 
-<svelte:head><title>inkan — an allowance for your agent</title></svelte:head>
+<svelte:head>
+	<title>inkan — an allowance for an AI agent</title>
+	<meta
+		name="description"
+		content="inkan gives an AI agent a spending allowance instead of your PayPal login. A deterministic rule table decides, ambiguity waits for a person, and every attempt lands in a ledger."
+	/>
+</svelte:head>
 
-<main class="mx-auto w-full max-w-5xl px-5 pt-10 pb-24">
-	<header
-		class="-mx-5 grid gap-10 border-b border-border bg-muted/40 px-5 pb-10 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-end"
+<main class="mx-auto w-full max-w-6xl px-5 sm:px-8">
+	<!-- The masthead. A document header, not a screenshot above a gradient. -->
+	<section
+		class="grid gap-8 border-b border-border py-16 sm:py-24 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-16"
 	>
-		<div class="flex flex-col gap-5">
-			<div class="flex flex-wrap items-center gap-3">
-				<StatusPill tone={revoked ? 'danger' : 'success'} label={revoked ? 'Stopped' : 'Active'} />
-				<span class="text-xs text-muted-foreground">
-					Agent <span class="font-mono">{data.agentId}</span>
-				</span>
+		<!-- The seal sits in the margin at wide sizes, like a stamp on a letter. -->
+		<div
+			class="flex items-center gap-4 lg:col-start-2 lg:row-start-1 lg:flex-col lg:items-end lg:gap-3"
+		>
+			<div class="shrink-0 seal-mark">
+				<Seal size="md" label="inkan" sublabel="2026" />
 			</div>
+			<p
+				class="max-w-56 text-[0.75rem] leading-relaxed text-muted-foreground lg:max-w-44 lg:text-right"
+			>
+				inkan is the seal a person presses onto a document to authorise it.
+			</p>
+		</div>
+
+		<div class="flex flex-col lg:col-start-1 lg:row-start-1">
+			<p class="eyebrow text-muted-foreground">PayPal AI Hackathon 2026</p>
 
 			<h1
-				class="max-w-2xl font-heading text-4xl leading-[1.03] tracking-tight text-balance sm:text-5xl"
+				class="mt-5 max-w-3xl font-heading text-[2.75rem] leading-[0.98] tracking-[-0.02em] sm:text-6xl lg:text-[4.25rem]"
 			>
-				An allowance, not your PayPal login.
+				The agent cannot pay.
+				<span class="block text-muted-foreground"> The capability lives with the allowance. </span>
 			</h1>
 
-			<p class="max-w-xl text-pretty text-muted-foreground">
-				{data.mandate.purpose}. The agent can ask, and a deterministic rule table decides — a
-				refusal touches no money, and anything ambiguous stops and waits for you.
+			<p class="mt-8 measure text-[1.0625rem] leading-relaxed">
+				Agents now buy inside Perplexity and ChatGPT, and the passkey proves it was you. What
+				nothing records is what the agent was allowed to do. So this gives it an allowance instead:
+				a purpose, a ceiling, one merchant, an expiry. A rule table decides every request, anything
+				ambiguous waits for a person, and every attempt lands in a ledger you can read.
 			</p>
 
-			<div class="flex flex-wrap items-center gap-3">
-				<Button href="/demo">
-					<Play class="size-3.5" />
-					Run the agent
+			<div class="mt-10 flex flex-wrap items-center gap-3">
+				<Button href="/allowance" size="lg">
+					Open the allowance
+					<ArrowRight class="size-3.5" />
 				</Button>
-				<Button variant="outline" href="/ledger">
-					<Receipt class="size-3.5" />
-					See what it bought
-				</Button>
-			</div>
-		</div>
-
-		<div class="border border-border bg-card p-5">
-			<p class="text-[0.625rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-				Left of the allowance
-			</p>
-			<p class="tabular mt-2 font-mono text-4xl tracking-tight">
-				{formatMoney({ cents: remaining, currency: data.mandate.ceiling.currency })}
-			</p>
-
-			<div class="mt-4 h-1 w-full bg-muted" aria-hidden="true">
-				<div
-					class="h-full bg-foreground transition-[width] duration-500"
-					style="width: {usedPercent}%"
-				></div>
+				<Button href="/demo" variant="outline" size="lg">Watch it refuse</Button>
 			</div>
 
-			<p class="mt-2 text-xs text-muted-foreground">
-				{formatMoney(data.spent)} committed of {formatMoney(data.mandate.ceiling)}. Refunds come
-				back to the ceiling.
+			<p class="mt-6 text-[0.8125rem] text-muted-foreground">
+				Sandbox only &middot; no credentials needed &middot; a recorded run replays offline
 			</p>
 		</div>
-	</header>
-
-	{#if data.demoMode === 'replay'}
-		<p class="mt-6 flex items-start gap-2 border border-border bg-muted/40 px-4 py-3 text-sm">
-			<Clock class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-			<span>
-				<strong class="font-semibold">Replay.</strong> A recorded sandbox run, served from
-				<code class="font-mono text-xs">tape.json</code>. No live payment is made.
-			</span>
-		</p>
-	{/if}
-
-	{#if data.pending.length > 0}
-		<Card.Root class="mt-6 border-l-2 border-l-warning">
-			<Card.Header>
-				<StatusPill tone="warning" label="Waiting for you" />
-				<Card.Title class="font-heading text-xl">
-					{data.pending.length}
-					{data.pending.length === 1 ? 'purchase needs' : 'purchases need'} a decision
-				</Card.Title>
-				<Card.Description>Nothing is held and nothing is charged until you say so.</Card.Description
-				>
-			</Card.Header>
-			<Card.Content class="flex flex-col divide-y divide-border">
-				{#each data.pending as row (row.id)}
-					<a
-						class="flex items-center justify-between gap-4 py-3 text-sm transition-colors hover:text-foreground"
-						href="/approve/{row.id}"
-					>
-						<span class="min-w-0">
-							<span class="tabular font-mono">{formatMoney(row.amount)}</span>
-							<span class="text-muted-foreground"> &middot; {row.rawRequest}</span>
-						</span>
-						<ArrowRight class="size-4 shrink-0 text-muted-foreground" />
-					</a>
-				{/each}
-			</Card.Content>
-		</Card.Root>
-	{/if}
-
-	<section class="mt-12">
-		<div class="flex items-baseline justify-between gap-4">
-			<h2 class="text-[0.6875rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-				The rules it is held to
-			</h2>
-			<span class="text-xs text-muted-foreground">enforced by the service, not the agent</span>
-		</div>
-
-		<dl
-			class="mt-4 grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-3"
-		>
-			{#each rules as rule (rule.label)}
-				<div class="bg-background p-5">
-					<dt
-						class="text-[0.625rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase"
-					>
-						{rule.label}
-					</dt>
-					<dd class="mt-2 text-sm" class:font-mono={rule.mono} class:tabular={rule.mono}>
-						{rule.value}
-					</dd>
-				</div>
-			{/each}
-		</dl>
 	</section>
 
-	<section class="mt-12">
-		<h2 class="text-[0.6875rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-			Where to look next
-		</h2>
-
-		<div class="mt-4 grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-3">
+	<!-- 01. The artefact. The document itself is the hero image. -->
+	<section
+		class="grid gap-10 py-16 ruled sm:py-20 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-12 lg:gap-16"
+	>
+		<div class="flex flex-col gap-5">
+			<p class="eyebrow text-muted-foreground">01 &mdash; The artefact</p>
+			<h2 class="font-heading text-3xl leading-tight tracking-tight sm:text-4xl">
+				A record, not a setting.
+			</h2>
+			<p class="measure leading-relaxed text-muted-foreground">
+				This is the allowance the demo runs on, read live from the service. Every value below is
+				data the rule table compares against, so you can predict any verdict from the paper alone.
+				Narrowing only ever removes room to spend; there is no control that widens it.
+			</p>
 			<a
-				class="group flex flex-col gap-3 bg-background p-5 transition-colors hover:bg-muted/50"
-				href="/demo"
+				class="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+				href="/allowance"
 			>
-				<div class="flex items-center justify-between">
-					<Wallet class="size-4 text-muted-foreground" />
-					<ArrowRight
-						class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-					/>
-				</div>
-				<p class="font-heading text-lg">Run the agent</p>
-				<p class="text-sm text-muted-foreground">
-					Four attempts, one approval, three refusals. The whole story in one button.
-				</p>
+				Change the rules yourself
+				<ArrowUpRight class="size-3.5" />
 			</a>
+		</div>
 
+		<div class="border border-border bg-card">
+			<div class="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
+				<p class="eyebrow text-muted-foreground">Spending authority</p>
+				<StatusPill
+					tone={data.mandate.status === 'active' ? 'success' : 'danger'}
+					label={data.mandate.status}
+				/>
+			</div>
+
+			<dl class="divide-y divide-border">
+				<div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-4 px-5 py-3.5">
+					<dt class="text-[0.8125rem] text-muted-foreground">For</dt>
+					<dd class="text-[0.9375rem]">{data.mandate.purpose}</dd>
+				</div>
+				<div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-4 px-5 py-3.5">
+					<dt class="text-[0.8125rem] text-muted-foreground">Only at</dt>
+					<dd class="figure text-[0.875rem]">{data.storeSlug}</dd>
+				</div>
+				<div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-4 px-5 py-3.5">
+					<dt class="text-[0.8125rem] text-muted-foreground">In total</dt>
+					<dd class="figure text-[0.9375rem]">{formatMoney(data.mandate.ceiling)}</dd>
+				</div>
+				<div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-4 px-5 py-3.5">
+					<dt class="text-[0.8125rem] text-muted-foreground">One purchase</dt>
+					<dd class="figure text-[0.9375rem]">{formatMoney(data.mandate.perTransactionCap)}</dd>
+				</div>
+				<div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-4 px-5 py-3.5">
+					<dt class="text-[0.8125rem] text-muted-foreground">Without asking</dt>
+					<dd class="figure text-[0.9375rem]">{formatMoney(data.mandate.autoApproveAmount)}</dd>
+				</div>
+				<div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-4 px-5 py-3.5">
+					<dt class="text-[0.8125rem] text-muted-foreground">Good until</dt>
+					<dd class="figure text-[0.9375rem]">{data.mandate.expiresAt.slice(0, 10)}</dd>
+				</div>
+			</dl>
+
+			<div class="border-t border-border px-5 py-4">
+				<p class="text-[0.8125rem] text-muted-foreground">
+					{formatMoney(data.spent)} of {formatMoney(data.mandate.ceiling)} committed. A refund returns
+					money to the ceiling and does not re-open an approval.
+				</p>
+			</div>
+		</div>
+	</section>
+
+	<!-- 02. The record. Real rows, real PayPal identifiers. -->
+	<section
+		class="grid gap-10 py-16 ruled sm:py-20 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-12 lg:gap-16"
+	>
+		<div class="flex flex-col gap-5">
+			<p class="eyebrow text-muted-foreground">02 &mdash; The record</p>
+			<h2 class="font-heading text-3xl leading-tight tracking-tight sm:text-4xl">
+				Every attempt, including the no.
+			</h2>
+			<p class="measure leading-relaxed text-muted-foreground">
+				A refusal is a row, not a silence. The ledger is append-only, so nothing is edited and
+				nothing is removed, and a refund appears as its own event pointing at the payment it
+				reverses.
+			</p>
 			<a
-				class="group flex flex-col gap-3 bg-background p-5 transition-colors hover:bg-muted/50"
+				class="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
 				href="/ledger"
 			>
-				<div class="flex items-center justify-between">
-					<Receipt class="size-4 text-muted-foreground" />
-					<ArrowRight
-						class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-					/>
-				</div>
-				<p class="font-heading text-lg">Read the ledger</p>
-				<p class="text-sm text-muted-foreground">
-					{data.ledgerCount}
-					{data.ledgerCount === 1 ? 'event' : 'events'} on the record, refused ones included. Refunds
-					hang off the row they reverse.
-				</p>
-			</a>
-
-			<a
-				class="group flex flex-col gap-3 bg-background p-5 transition-colors hover:bg-muted/50"
-				href="/store"
-			>
-				<div class="flex items-center justify-between">
-					<Store class="size-4 text-muted-foreground" />
-					<ArrowRight
-						class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-					/>
-				</div>
-				<p class="font-heading text-lg">Visit the shop</p>
-				<p class="text-sm text-muted-foreground">
-					The one merchant the allowance covers, and the three things it sells.
-				</p>
+				Read all {data.ledgerCount}
+				{data.ledgerCount === 1 ? 'event' : 'events'}
+				<ArrowUpRight class="size-3.5" />
 			</a>
 		</div>
-	</section>
 
-	{#if data.recent.length > 0}
-		<section class="mt-12">
-			<div class="flex items-baseline justify-between gap-4">
-				<h2
-					class="text-[0.6875rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase"
-				>
-					Most recent
-				</h2>
-				<a
-					class="inline-flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-					href="/ledger"
-				>
-					Everything
-					<ExternalLink class="size-3" />
-				</a>
-			</div>
-
-			<ul class="mt-4 flex flex-col border-t border-border">
-				{#each data.recent as row (row.id)}
-					<li
-						class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border py-3"
-					>
-						<div class="flex items-center gap-3">
-							<StatusPill tone={ledgerTone(row.kind)} label={ledgerLabel(row.kind)} />
-							<span class="tabular font-mono text-sm">{formatMoney(row.amount)}</span>
-						</div>
-						<span class="font-mono text-xs text-muted-foreground">{when(row.at)}</span>
-					</li>
-				{/each}
-			</ul>
-		</section>
-	{/if}
-
-	<section class="mt-12 grid gap-px border border-border bg-border lg:grid-cols-2">
-		<div class="flex flex-col gap-4 bg-background p-6">
+		{#if data.recent.length > 0}
 			<div>
-				<h2 class="font-heading text-xl">Lower the allowance</h2>
-				<p class="mt-1 text-sm text-muted-foreground">
-					Narrowing is instant and permanent. There is no way to raise it — a budget you can raise
-					on request is not a budget.
-				</p>
-			</div>
-
-			{#if revoked}
-				<p class="border border-border bg-muted/40 px-4 py-3 text-sm">
-					This allowance is stopped. Nothing can be spent with it, and the record stays readable.
-				</p>
-			{:else}
-				<form class="flex flex-wrap items-end gap-3" onsubmit={(event) => event.preventDefault()}>
-					<div class="flex flex-col gap-1.5">
-						<Label for="ceiling">New ceiling, in dollars</Label>
-						<div class="flex items-center gap-2">
-							<span class="font-mono text-sm text-muted-foreground">$</span>
-							<Input
-								id="ceiling"
-								class="w-28 font-mono"
-								inputmode="decimal"
-								value={ceilingValue}
-								oninput={(event) => (ceilingInput = event.currentTarget.value)}
-							/>
-						</div>
-					</div>
-					<Button onclick={saveCeiling} disabled={busy}>
-						{busy ? 'Saving…' : 'Save'}
-					</Button>
-				</form>
-
-				<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
-					<CircleCheck class="size-3.5" />
-					{formatMoney(data.spent)} of {formatMoney(data.mandate.ceiling)} is already committed.
-				</p>
-			{/if}
-		</div>
-
-		<div class="flex flex-col gap-4 bg-background p-6">
-			<div>
-				<h2 class="font-heading text-xl">Stop the agent</h2>
-				<p class="mt-1 text-sm text-muted-foreground">
-					Revoking kills the live capability, so the next attempt fails because the permission is
-					gone rather than because a flag flipped. It cannot be undone.
-				</p>
-			</div>
-
-			{#if revoked}
-				<p class="border border-border bg-muted/40 px-4 py-3 text-sm">
-					Stopped. The ledger and the receipts stay readable.
-				</p>
-			{:else if confirming}
-				<div class="flex flex-col gap-3 border border-destructive/40 bg-destructive/5 p-4">
-					<p class="text-sm">Revoke this allowance now? Nothing further can be bought with it.</p>
-					<div class="flex flex-wrap gap-2">
-						<Button variant="destructive" onclick={revoke} disabled={busy}>
-							{busy ? 'Working…' : 'Yes, revoke it'}
-						</Button>
-						<Button variant="outline" onclick={() => (confirming = false)} disabled={busy}>
-							Keep it
-						</Button>
-					</div>
+				<div
+					class="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border pb-2 eyebrow text-muted-foreground"
+				>
+					<span>What happened</span>
+					<span class="text-right">When</span>
 				</div>
-			{:else}
-				<Button
-					variant="destructive"
-					class="w-fit"
-					onclick={() => (confirming = true)}
-					disabled={busy}
-				>
-					<ShieldX class="size-3.5" />
-					Stop this agent now
+				<ul>
+					{#each data.recent as row (row.id)}
+						<li
+							class="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-4 border-b border-border py-3"
+						>
+							<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+								<StatusPill tone={ledgerTone(row.kind)} label={ledgerLabel(row.kind)} />
+								<span class="figure text-[0.9375rem]">{formatMoney(row.amount)}</span>
+							</div>
+							<span class="text-right figure text-[0.75rem] text-muted-foreground"
+								>{when(row.at)}</span
+							>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{:else}
+			<div class="border border-border px-5 py-8">
+				<p class="font-heading text-xl">Nothing has been bought yet</p>
+				<p class="mt-1 text-[0.9375rem] text-muted-foreground">
+					Run the four beats and the ledger fills from what actually happened.
+				</p>
+				<Button href="/demo" variant="outline" class="mt-5">
+					Run the agent
+					<ArrowRight class="size-3.5" />
 				</Button>
-			{/if}
+			</div>
+		{/if}
+	</section>
+
+	<!-- The refusal. The one beat a viewer remembers, so it gets its own stage. -->
+	<section class="border-y border-border bg-muted/50">
+		<div class="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-16 sm:px-8 sm:py-20">
+			<p class="eyebrow text-muted-foreground">The moment that matters</p>
+
+			<h2 class="max-w-4xl font-heading text-[2rem] leading-[1.1] tracking-[-0.015em] sm:text-5xl">
+				The agent asked for an annual bundle. The single-purchase limit said no, before any money
+				moved.
+			</h2>
+
+			<!-- Three figures in one register, so the comparison reads as a row, not a sentence. -->
+			<dl class="grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-3">
+				<div class="flex flex-col gap-2 bg-background px-5 py-5">
+					<dt class="eyebrow text-muted-foreground">Asked for</dt>
+					<dd class="figure text-2xl">$340.00</dd>
+				</div>
+				<div class="flex flex-col gap-2 bg-background px-5 py-5">
+					<dt class="eyebrow text-muted-foreground">One purchase allows</dt>
+					<dd class="figure text-2xl">{formatMoney(data.mandate.perTransactionCap)}</dd>
+				</div>
+				<div class="flex flex-col gap-2 bg-background px-5 py-5">
+					<dt class="eyebrow text-muted-foreground">Held against the card</dt>
+					<dd class="figure text-2xl">$0.00</dd>
+				</div>
+			</dl>
+
+			<div class="flex flex-col gap-3 border-l-2 border-destructive pl-5">
+				<p class="figure text-[0.8125rem] text-destructive">over_per_txn_cap</p>
+				<p class="measure text-[0.9375rem] leading-relaxed">
+					The order is created bare, with no card attached, so a refusal has nothing to release. It
+					also costs nothing and returns in under a millisecond, because no model is anywhere near
+					the decision, and it is written down like every other attempt.
+				</p>
+			</div>
+
+			<div>
+				<Button href="/demo" size="lg">
+					Run the four beats
+					<ArrowRight class="size-3.5" />
+				</Button>
+			</div>
 		</div>
 	</section>
 
-	{#if error}<p class="mt-4 text-sm text-destructive">{error}</p>{/if}
-	{#if note}<p class="mt-4 text-sm text-muted-foreground">{note}</p>{/if}
+	<!-- 03. How it works. A spec list, deliberately not three cards with icons. -->
+	<section class="py-16 ruled sm:py-20">
+		<p class="eyebrow text-muted-foreground">03 &mdash; How it works</p>
+		<h2 class="mt-5 max-w-3xl font-heading text-3xl leading-tight tracking-tight sm:text-4xl">
+			Four steps, and the agent holds no credential at any of them.
+		</h2>
+
+		<ol class="mt-12 grid gap-px border border-border bg-border sm:grid-cols-2">
+			{#each steps as step (step.n)}
+				<li class="flex flex-col gap-3 bg-background p-6 sm:p-8">
+					<span class="figure text-[0.75rem] text-muted-foreground">{step.n}</span>
+					<h3 class="font-heading text-xl leading-snug">{step.title}</h3>
+					<p class="text-[0.9375rem] leading-relaxed text-muted-foreground">{step.body}</p>
+				</li>
+			{/each}
+		</ol>
+	</section>
+
+	<!-- The boundary. Saying what it does not do is the cheapest credibility there is. -->
+	<section
+		class="grid gap-10 py-16 ruled sm:py-20 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-12 lg:gap-16"
+	>
+		<div class="flex flex-col gap-5">
+			<p class="eyebrow text-muted-foreground">04 &mdash; The boundary</p>
+			<h2 class="font-heading text-3xl leading-tight tracking-tight sm:text-4xl">
+				What this does not do.
+			</h2>
+			<p class="measure leading-relaxed text-muted-foreground">
+				Named on purpose, so each one is a decision rather than an omission. A prototype that states
+				its own edges is easier to trust than one that does not.
+			</p>
+		</div>
+
+		<ul class="flex flex-col">
+			{#each limits as limit, index (limit)}
+				<li class="flex gap-4 border-b border-border py-4 first:border-t">
+					<span class="shrink-0 figure text-[0.75rem] text-muted-foreground"
+						>{String(index + 1).padStart(2, '0')}</span
+					>
+					<span class="text-[0.9375rem] leading-relaxed">{limit}</span>
+				</li>
+			{/each}
+		</ul>
+	</section>
+
+	<!-- Close. One action, and what happens when you take it. -->
+	<section class="flex flex-col gap-6 py-16 ruled sm:py-20">
+		<h2 class="max-w-3xl font-heading text-3xl leading-tight tracking-tight sm:text-4xl">
+			Four clicks shows the whole story: a payment, an escalation, two refusals, and a refund.
+		</h2>
+		<p class="measure text-[0.9375rem] leading-relaxed text-muted-foreground">
+			No keys, no database and no network. The recorded run replays answers PayPal actually gave, so
+			it works on a train.
+		</p>
+		<div class="flex flex-wrap items-center gap-3">
+			<Button href="/demo" size="lg">
+				Start the demo
+				<ArrowRight class="size-3.5" />
+			</Button>
+			<Button href="/ledger" variant="outline" size="lg">Open the ledger</Button>
+		</div>
+	</section>
 </main>

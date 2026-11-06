@@ -1,8 +1,10 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn-svelte/tailwind.css';
-@import '@fontsource-variable/noto-sans';
-@import '@fontsource-variable/playfair-display';
+@import '@fontsource-variable/ibm-plex-sans';
+@import '@fontsource-variable/source-serif-4';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -47,6 +49,9 @@
 	--warning-foreground: oklch(0.99 0.01 68);
 	--info: oklch(0.44 0.12 245);
 	--info-foreground: oklch(0.99 0.01 245);
+
+	/* The seal. A brand mark and the act of authorising, never a status. */
+	--seal: oklch(0.48 0.19 32);
 }
 
 .dark {
@@ -89,11 +94,15 @@
 	--warning-foreground: oklch(0.17 0.02 78);
 	--info: oklch(0.78 0.12 245);
 	--info-foreground: oklch(0.16 0.02 245);
+
+	--seal: oklch(0.75 0.17 32);
 }
 
 @theme inline {
-	--font-sans: 'Noto Sans Variable', sans-serif;
-	--font-heading: 'Playfair Display Variable', serif;
+	--font-sans: 'IBM Plex Sans Variable', ui-sans-serif, sans-serif;
+	--font-heading: 'Source Serif 4 Variable', ui-serif, serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	--color-seal: var(--seal);
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -150,6 +159,7 @@
 		background-color: var(--background);
 		color: var(--foreground);
 		text-rendering: optimizeLegibility;
+		-webkit-font-smoothing: antialiased;
 	}
 
 	::selection {
@@ -157,15 +167,81 @@
 		color: var(--background);
 	}
 
-	/* Acknowledgements and figures should never be mistaken for editable text. */
-	.tabular {
-		font-variant-numeric: tabular-nums;
+	/* Every figure in this product is money or an identifier, so mono is the floor. */
+	.font-mono,
+	code,
+	kbd,
+	samp,
+	pre {
+		font-feature-settings:
+			'tnum' 1,
+			'zero' 1;
+	}
+
+	h1,
+	h2,
+	h3 {
+		text-wrap: balance;
+	}
+
+	p {
+		text-wrap: pretty;
 	}
 }
 
-/* The hairline the whole shell is built from: one border, two tones. */
-@utility hairline {
-	border: 1px solid var(--border);
+/* The rule a printed ledger is built from. One line, and the space does the rest. */
+@utility ruled {
+	border-top: 1px solid var(--border);
+}
+
+/* A number that is meant to be read across rows, so it is set in the data face. */
+@utility figure {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.01em;
+}
+
+/* Figures that must line up in a column, even inside a text face. */
+@utility tabular {
+	font-variant-numeric: tabular-nums;
+}
+
+/* The small caps label: 11px, Plex Sans, and never on body copy. */
+@utility eyebrow {
+	font-family: var(--font-sans);
+	font-size: 0.6875rem;
+	font-weight: 500;
+	line-height: 1.2;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+
+/* Prose that has to be read rather than scanned. */
+@utility measure {
+	max-width: 68ch;
+}
+
+/* One gesture in the whole product: the seal arriving on the page. */
+@keyframes press-seal {
+	from {
+		opacity: 0;
+		transform: rotate(-5deg) scale(1.06);
+	}
+	to {
+		opacity: 1;
+		transform: rotate(-3deg) scale(1);
+	}
+}
+
+@utility seal-mark {
+	animation: press-seal 320ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.seal-mark {
+		animation: none;
+		transform: rotate(-3deg);
+	}
 }
 
 @layer base {

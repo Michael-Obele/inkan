@@ -12,7 +12,7 @@
 	<header class="-mx-5 flex flex-col gap-4 border-b border-border bg-muted/40 px-5 pb-10">
 		<div class="flex items-center gap-2 text-muted-foreground">
 			<StoreIcon class="size-4" />
-			<span class="text-[0.6875rem] font-semibold tracking-[0.18em] uppercase">The shop</span>
+			<span class="eyebrow">The shop</span>
 		</div>
 
 		<h1
@@ -45,22 +45,18 @@
 						</p>
 					{/if}
 				</div>
-				<p class="tabular shrink-0 font-mono text-xl">{formatMoney(product.price)}</p>
+				<p class="shrink-0 font-mono text-xl tabular">{formatMoney(product.price)}</p>
 			</li>
 		{/each}
 	</ul>
 
 	<div class="mt-8 grid gap-px border border-border bg-border sm:grid-cols-2">
 		<div class="bg-background p-5">
-			<p class="text-[0.625rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-				Handle the agent sees
-			</p>
+			<p class="eyebrow">Handle the agent sees</p>
 			<p class="mt-2 font-mono text-sm">{data.slug}</p>
 		</div>
 		<div class="bg-background p-5">
-			<p class="text-[0.625rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-				Merchant id PayPal reports
-			</p>
+			<p class="eyebrow">Merchant id PayPal reports</p>
 			<p class="mt-2 font-mono text-sm">{data.merchantId}</p>
 		</div>
 	</div>

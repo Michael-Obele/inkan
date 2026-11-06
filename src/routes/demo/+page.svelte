@@ -184,9 +184,7 @@
 
 	<div class="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
 		<section class="flex flex-col gap-2">
-			<h2 class="text-[0.6875rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-				The four beats
-			</h2>
+			<h2 class="eyebrow">The four beats</h2>
 
 			<ol class="flex flex-col">
 				{#each data.beats as beat (beat.id)}
@@ -202,7 +200,7 @@
 						<div class="flex min-w-0 flex-col gap-3">
 							<div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
 								<p class="max-w-xl font-heading text-lg leading-snug">“{beat.say}”</p>
-								<p class="tabular shrink-0 font-mono text-sm">{formatMoney(beat.amount)}</p>
+								<p class="shrink-0 font-mono text-sm tabular">{formatMoney(beat.amount)}</p>
 							</div>
 
 							<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -294,17 +292,17 @@
 						<Separator />
 						<div class="flex items-baseline justify-between gap-4 py-2">
 							<dt class="text-muted-foreground">Ceiling</dt>
-							<dd class="tabular font-mono">{formatMoney(data.mandate.ceiling)}</dd>
+							<dd class="font-mono tabular">{formatMoney(data.mandate.ceiling)}</dd>
 						</div>
 						<Separator />
 						<div class="flex items-baseline justify-between gap-4 py-2">
 							<dt class="text-muted-foreground">One purchase</dt>
-							<dd class="tabular font-mono">{formatMoney(data.mandate.perTransactionCap)}</dd>
+							<dd class="font-mono tabular">{formatMoney(data.mandate.perTransactionCap)}</dd>
 						</div>
 						<Separator />
 						<div class="flex items-baseline justify-between gap-4 py-2">
 							<dt class="text-muted-foreground">Without asking</dt>
-							<dd class="tabular font-mono">{formatMoney(data.mandate.autoApproveAmount)}</dd>
+							<dd class="font-mono tabular">{formatMoney(data.mandate.autoApproveAmount)}</dd>
 						</div>
 						<Separator />
 						<div class="flex items-baseline justify-between gap-4 py-2">
@@ -314,7 +312,7 @@
 						<Separator />
 						<div class="flex items-baseline justify-between gap-4 py-2">
 							<dt class="text-muted-foreground">Left</dt>
-							<dd class="tabular font-mono">{formatMoney(data.mandate.remaining)}</dd>
+							<dd class="font-mono tabular">{formatMoney(data.mandate.remaining)}</dd>
 						</div>
 					</dl>
 				</Card.Content>
