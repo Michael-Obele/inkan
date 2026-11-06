@@ -38,6 +38,31 @@
 	);
 	const ceilingValue = $derived(ceilingInput ?? (data.mandate.ceiling.cents / 100).toFixed(2));
 
+	const ceilingRule = $derived(
+		`The ceiling is ${formatMoney(data.mandate.ceiling)} and can only go down.`
+	);
+
+	/**
+	 * One place decides whether the typed amount can be saved, so the button, the
+	 * hint and the service cannot disagree about the rule.
+	 */
+	const ceilingCheck = $derived.by(() => {
+		const text = ceilingValue.trim();
+		const notANumber = 'Enter an amount in dollars, like 60.00.';
+
+		if (text === '') return { cents: null, problem: notANumber };
+		const dollars = Number(text);
+		if (!Number.isFinite(dollars)) return { cents: null, problem: notANumber };
+
+		const cents = Math.round(dollars * 100);
+		if (cents < 1) return { cents, problem: 'The new ceiling has to be more than zero.' };
+		if (cents >= data.mandate.ceiling.cents) return { cents, problem: ceilingRule };
+
+		return { cents, problem: null };
+	});
+
+	const canSave = $derived(!busy && ceilingCheck.problem === null);
+
 	const rules = $derived([
 		{ label: 'For', value: data.mandate.purpose, mono: false },
 		{ label: 'Only at', value: data.storeSlug, mono: true },
@@ -48,15 +73,8 @@
 	]);
 
 	async function saveCeiling() {
-		const cents = Math.round(Number.parseFloat(ceilingValue) * 100);
-		if (!Number.isFinite(cents) || cents <= 0) {
-			error = 'Enter an amount in dollars, like 80.00.';
-			return;
-		}
-		if (cents >= data.mandate.ceiling.cents) {
-			error = `That is not lower than the ceiling of ${formatMoney(data.mandate.ceiling)}. Narrowing only removes room to spend.`;
-			return;
-		}
+		const cents = ceilingCheck.cents;
+		if (cents === null || ceilingCheck.problem !== null) return;
 
 		busy = true;
 		error = null;
@@ -117,12 +135,12 @@
 			<h1
 				class="max-w-2xl font-heading text-4xl leading-[1.03] tracking-tight text-balance sm:text-5xl"
 			>
-				An allowance, not your PayPal login.
+				What your agent may buy.
 			</h1>
 
 			<p class="max-w-xl text-pretty text-muted-foreground">
-				{data.mandate.purpose}. The agent can ask, and a deterministic rule table decides — a
-				refusal touches no money, and anything ambiguous stops and waits for you.
+				{data.mandate.purpose}. The agent asks, and a rule table answers. A refusal touches no
+				money. Anything unclear stops and waits for you.
 			</p>
 
 			<div class="flex flex-wrap items-center gap-3">
@@ -217,62 +235,6 @@
 		</dl>
 	</section>
 
-	<section class="mt-12">
-		<h2 class="eyebrow">Where to look next</h2>
-
-		<div class="mt-4 grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-3">
-			<a
-				class="group flex flex-col gap-3 bg-background p-5 transition-colors hover:bg-muted/50"
-				href="/demo"
-			>
-				<div class="flex items-center justify-between">
-					<Wallet class="size-4 text-muted-foreground" />
-					<ArrowRight
-						class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-					/>
-				</div>
-				<p class="font-heading text-lg">Run the agent</p>
-				<p class="text-sm text-muted-foreground">
-					Four attempts, one approval, three refusals. The whole story in one button.
-				</p>
-			</a>
-
-			<a
-				class="group flex flex-col gap-3 bg-background p-5 transition-colors hover:bg-muted/50"
-				href="/ledger"
-			>
-				<div class="flex items-center justify-between">
-					<Receipt class="size-4 text-muted-foreground" />
-					<ArrowRight
-						class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-					/>
-				</div>
-				<p class="font-heading text-lg">Read the ledger</p>
-				<p class="text-sm text-muted-foreground">
-					{data.ledgerCount}
-					{data.ledgerCount === 1 ? 'event' : 'events'} on the record, refused ones included. Refunds
-					hang off the row they reverse.
-				</p>
-			</a>
-
-			<a
-				class="group flex flex-col gap-3 bg-background p-5 transition-colors hover:bg-muted/50"
-				href="/store"
-			>
-				<div class="flex items-center justify-between">
-					<Store class="size-4 text-muted-foreground" />
-					<ArrowRight
-						class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-					/>
-				</div>
-				<p class="font-heading text-lg">Visit the shop</p>
-				<p class="text-sm text-muted-foreground">
-					The one merchant the allowance covers, and the three things it sells.
-				</p>
-			</a>
-		</div>
-	</section>
-
 	{#if data.recent.length > 0}
 		<section class="mt-12">
 			<div class="flex items-baseline justify-between gap-4">
@@ -307,8 +269,8 @@
 			<div>
 				<h2 class="font-heading text-xl">Lower the allowance</h2>
 				<p class="mt-1 text-sm text-muted-foreground">
-					Narrowing is instant and permanent. There is no way to raise it — a budget you can raise
-					on request is not a budget.
+					Narrowing is permanent. Nothing can raise it again, because a budget you can raise on
+					request is not a budget.
 				</p>
 			</div>
 
@@ -317,23 +279,37 @@
 					This allowance is stopped. Nothing can be spent with it, and the record stays readable.
 				</p>
 			{:else}
-				<form class="flex flex-wrap items-end gap-3" onsubmit={(event) => event.preventDefault()}>
-					<div class="flex flex-col gap-1.5">
-						<Label for="ceiling">New ceiling, in dollars</Label>
-						<div class="flex items-center gap-2">
-							<span class="font-mono text-sm text-muted-foreground">$</span>
-							<Input
-								id="ceiling"
-								class="w-28 font-mono"
-								inputmode="decimal"
-								value={ceilingValue}
-								oninput={(event) => (ceilingInput = event.currentTarget.value)}
-							/>
+				<form
+					class="flex flex-col gap-2"
+					onsubmit={(event) => {
+						event.preventDefault();
+						void saveCeiling();
+					}}
+				>
+					<div class="flex flex-wrap items-end gap-3">
+						<div class="flex flex-col gap-1.5">
+							<Label for="ceiling">New ceiling, in dollars</Label>
+							<div class="flex items-center gap-2">
+								<span class="font-mono text-sm text-muted-foreground">$</span>
+								<Input
+									id="ceiling"
+									class="w-28 font-mono"
+									inputmode="decimal"
+									value={ceilingValue}
+									aria-invalid={ceilingInput !== null && ceilingCheck.problem !== null}
+									aria-describedby="ceiling-hint"
+									oninput={(event) => (ceilingInput = event.currentTarget.value)}
+								/>
+							</div>
 						</div>
+						<Button type="submit" disabled={!canSave}>
+							{busy ? 'Saving…' : 'Save'}
+						</Button>
 					</div>
-					<Button onclick={saveCeiling} disabled={busy}>
-						{busy ? 'Saving…' : 'Save'}
-					</Button>
+
+					<p id="ceiling-hint" class="text-xs text-muted-foreground">
+						{ceilingCheck.problem ?? ceilingRule}
+					</p>
 				</form>
 
 				<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
