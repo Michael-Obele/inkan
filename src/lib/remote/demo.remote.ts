@@ -2,6 +2,8 @@ import * as v from 'valibot';
 import { command, query } from '$app/server';
 import { app } from '#lib/server/app';
 import { outcomeOf, resetDemo, runBeat } from '#lib/server/demo';
+import { compose } from '#lib/server/compose';
+import { requestPayment } from '#lib/server/spend';
 import { money } from '#lib/money';
 import { recordedTape } from '#lib/server/paypal/recorded';
 import { SCENARIO } from '#lib/server/scenario';
@@ -108,3 +110,60 @@ export const resetTheDemo = command(async () => {
 		};
 	}
 });
+
+/**
+ * Reads a sentence against the shop. The reading comes back on its own, and the
+ * request is only made when the person sends it. The price and the shop come from
+ * the catalogue, never from the sentence.
+ */
+export const askTheAgent = command(
+	v.object({
+		text: v.pipe(v.string(), v.minLength(2), v.maxLength(280)),
+		send: v.boolean()
+	}),
+	async ({ text, send }) => {
+		const deps = await app();
+		const composed = compose(text);
+		if (composed.kind === 'no_match') return { ok: false as const, reason: 'no_match' as const };
+
+		const answer = {
+			item: composed.item.name,
+			amount: composed.amount,
+			merchantSlug: composed.merchantSlug,
+			recurring: composed.recurring
+		};
+
+		if (!send) return { ok: true as const, sent: false as const, answer };
+
+		// A recorded run is a fixed sequence, so a new request would desync the tape.
+		if (deps.config.demoMode === 'replay') {
+			return { ok: false as const, reason: 'replay' as const, answer };
+		}
+
+		const mandate = await currentMandate(deps.store, deps.config);
+		const result = await requestPayment(deps, {
+			mandateId: mandate.id,
+			agentId: mandate.agentId,
+			request: text,
+			amount: composed.amount,
+			merchantSlug: composed.merchantSlug,
+			category: composed.category,
+			recurring: composed.recurring
+		});
+
+		void getAgentConsole().refresh();
+
+		return {
+			ok: true as const,
+			sent: true as const,
+			answer,
+			outcome: {
+				requestId: result.requestId,
+				status: result.status,
+				verdict: result.verdict,
+				rule: result.rule,
+				reason: result.reason
+			}
+		};
+	}
+);

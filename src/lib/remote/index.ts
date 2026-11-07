@@ -4,7 +4,7 @@
  */
 export { getAllowance, issueAllowance, lowerCeiling, stopAgent } from './allowance.remote';
 export { getApproval, decideApproval } from './approval.remote';
-export { getAgentConsole, resetTheDemo, runBeatNow } from './demo.remote';
+export { askTheAgent, getAgentConsole, resetTheDemo, runBeatNow } from './demo.remote';
 export { getLedger, refundCapture } from './ledger.remote';
 export { getShell } from './shell.remote';
 export { getShop } from './shop.remote';

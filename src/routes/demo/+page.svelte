@@ -11,13 +11,74 @@
 	} from '@lucide/svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import StatusPill from '#lib/components/status-pill.svelte';
 	import { formatMoney } from '#lib/money';
-	import { getAgentConsole, resetTheDemo, runBeatNow } from '#lib/remote';
+	import { askTheAgent, getAgentConsole, resetTheDemo, runBeatNow } from '#lib/remote';
 	import type { BeatOutcome } from '#lib/outcome';
 
 	const data = $derived(await getAgentConsole());
+
+	type Reading = {
+		item: string;
+		amount: { cents: number; currency: string };
+		merchantSlug: string;
+		recurring: boolean;
+	};
+
+	let askText = $state('Buy a whole crate of beans for 900 dollars');
+	let asking = $state(false);
+	let reading = $state<Reading | null>(null);
+	let asked = $state<{ status: string; rule: string | null; reason: string | null } | null>(null);
+	let askNote = $state<string | null>(null);
+
+	const toneOf = (status: string): 'success' | 'warning' | 'danger' =>
+		status === 'captured' ? 'success' : status === 'pending' ? 'warning' : 'danger';
+	const labelOf = (status: string) =>
+		status === 'captured' ? 'Paid' : status === 'pending' ? 'Waiting for you' : 'Refused';
+
+	async function readSentence() {
+		asking = true;
+		askNote = null;
+		asked = null;
+		try {
+			const result = await askTheAgent({ text: askText, send: false });
+			if (!result.ok) {
+				reading = null;
+				askNote = 'The agent only knows the three things in the shop.';
+				return;
+			}
+			reading = result.answer;
+		} finally {
+			asking = false;
+		}
+	}
+
+	async function sendSentence() {
+		asking = true;
+		askNote = null;
+		try {
+			const result = await askTheAgent({ text: askText, send: true });
+			if (!result.ok) {
+				askNote =
+					result.reason === 'replay'
+						? 'The recorded run cannot take a new request. Start with DEMO_MODE=live.'
+						: 'The agent only knows the three things in the shop.';
+				return;
+			}
+			reading = result.answer;
+			if (!result.sent) return;
+			asked = {
+				status: result.outcome.status,
+				rule: result.outcome.rule,
+				reason: result.outcome.reason
+			};
+		} finally {
+			asking = false;
+		}
+	}
 
 	type Answer = {
 		actual: BeatOutcome;
@@ -160,6 +221,63 @@
 			<p class="text-sm text-destructive">{error}</p>
 		{/if}
 	</header>
+
+	<Card.Root class="mt-8">
+		<Card.Header>
+			<StatusPill tone="info" label="Ask it yourself" />
+			<Card.Title class="font-heading text-xl">Give the agent something to buy</Card.Title>
+			<Card.Description>
+				It reads your words against the three things in the shop. The price comes from the shop,
+				never from your sentence.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="flex flex-col gap-4">
+			<form
+				class="flex flex-wrap items-end gap-3"
+				onsubmit={(event) => {
+					event.preventDefault();
+					void readSentence();
+				}}
+			>
+				<div class="flex min-w-0 flex-1 flex-col gap-1.5">
+					<Label for="ask">Your words</Label>
+					<Input
+						id="ask"
+						bind:value={askText}
+						maxlength={280}
+						placeholder="Buy a whole crate of beans for 900 dollars"
+					/>
+				</div>
+				<Button type="submit" variant="outline" disabled={asking}>Read it</Button>
+			</form>
+
+			{#if reading}
+				<div class="flex flex-wrap items-center gap-3 border border-border bg-muted/40 px-4 py-3">
+					<p class="text-sm">
+						I read that as one {reading.item},
+						<span class="font-mono">{formatMoney(reading.amount)}</span> from
+						<span class="font-mono">{reading.merchantSlug}</span>. The number in your words is not
+						used.
+					</p>
+					<Button onclick={sendSentence} disabled={asking}>
+						{asking ? 'Sending…' : 'Send it'}
+					</Button>
+				</div>
+			{/if}
+
+			{#if askNote}
+				<p class="text-sm text-muted-foreground">{askNote}</p>
+			{/if}
+
+			{#if asked}
+				<div class="flex flex-wrap items-center gap-3 border border-border px-4 py-3 text-sm">
+					<StatusPill tone={toneOf(asked.status)} label={labelOf(asked.status)} />
+					<span class="font-mono text-xs">{asked.rule}</span>
+					<span class="text-muted-foreground">{asked.reason}</span>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 
 	{#if waiting.length > 0}
 		<Card.Root class="mt-8 border-l-2 border-l-warning">
