@@ -317,6 +317,7 @@
 				<p class="border border-border bg-muted/40 px-4 py-3 text-sm">
 					This allowance is stopped. Nothing can be spent with it, and the record stays readable.
 				</p>
+				<Button variant="outline" class="w-fit" href="/allowance/new">Issue a new allowance</Button>
 			{:else if confirmingCeiling}
 				<div class="flex flex-col gap-3 border border-border bg-muted/40 p-4">
 					<p class="text-sm">
@@ -370,6 +371,8 @@
 					<CircleCheck class="size-3.5" />
 					{formatMoney(data.spent)} of {formatMoney(data.mandate.ceiling)} is already committed.
 				</p>
+
+				<Button variant="outline" class="w-fit" href="/allowance/new">Issue a new allowance</Button>
 			{/if}
 		</div>
 

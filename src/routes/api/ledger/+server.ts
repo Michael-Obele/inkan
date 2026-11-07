@@ -1,15 +1,14 @@
 import type { RequestHandler } from './$types';
 import { app } from '#lib/server/app';
 import { failure, message, ok } from '#lib/server/http';
-import { DEMO_MANDATE_ID, seedMandate } from '#lib/server/seed';
+import { currentMandate } from '#lib/server/seed';
 
 /** The read model behind the ledger screen: rows, requests and their receipts. */
 export const GET: RequestHandler = async ({ url }) => {
-	const mandateId = url.searchParams.get('mandateId') ?? DEMO_MANDATE_ID;
-
 	try {
 		const deps = await app();
-		await seedMandate(deps.store, deps.config);
+		const current = await currentMandate(deps.store, deps.config);
+		const mandateId = url.searchParams.get('mandateId') ?? current.id;
 
 		const mandate = await deps.store.getMandate(mandateId);
 		if (!mandate) return failure(404, 'no such mandate');

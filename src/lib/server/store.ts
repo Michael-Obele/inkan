@@ -48,6 +48,12 @@ export type SpendRequestPatch = Partial<
  */
 export type Store = {
 	getMandate(id: string): Promise<MandateRow | null>;
+	/**
+	 * The newest mandate for one person, whatever its status. A stopped allowance
+	 * is still the current one, so the screen that reissues it has something to show.
+	 */
+	findNewestMandate(ownerId: string): Promise<MandateRow | null>;
+	listMandates(ownerId: string): Promise<MandateRow[]>;
 	createMandate(input: MandateInsert, change?: Narrowing | null): Promise<MandateRow>;
 	updateMandate(id: string, patch: Partial<MandateRow>): Promise<MandateRow>;
 	countMandateEvents(id: string): Promise<number>;

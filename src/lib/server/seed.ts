@@ -35,3 +35,14 @@ export async function seedMandate(store: Store, config: Config) {
 export async function seedReplay(store: Store, config: Config) {
 	return seedMandate(store, config);
 }
+
+/**
+ * The allowance in force: the newest one, whatever its status, so a stopped
+ * allowance still renders and can be replaced. An empty store is the only thing
+ * that gets seeded, which is what stops a stopped allowance coming back to life.
+ */
+export async function currentMandate(store: Store, config: Config) {
+	const newest = await store.findNewestMandate(DEMO_OWNER);
+	if (newest) return newest;
+	return seedMandate(store, config);
+}

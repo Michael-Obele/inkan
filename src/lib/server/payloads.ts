@@ -62,6 +62,10 @@ export const CreateMandateSchema = v.pipe(
 	v.check(
 		(input) => (input.autoApproveAmountCents ?? 0) <= input.perTransactionCapCents,
 		'the auto-approve amount cannot exceed the single purchase limit'
+	),
+	v.check(
+		(input) => new Date(input.expiresAt).getTime() > Date.now(),
+		'the expiry has to be in the future'
 	)
 );
 

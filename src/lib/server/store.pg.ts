@@ -20,6 +20,24 @@ export function createPgStore(databaseUrl: string): Store {
 			return rows[0] ?? null;
 		},
 
+		async findNewestMandate(ownerId) {
+			const rows = await db
+				.select()
+				.from(mandate)
+				.where(eq(mandate.ownerId, ownerId))
+				.orderBy(desc(mandate.createdAt))
+				.limit(1);
+			return rows[0] ?? null;
+		},
+
+		async listMandates(ownerId) {
+			return db
+				.select()
+				.from(mandate)
+				.where(eq(mandate.ownerId, ownerId))
+				.orderBy(mandate.createdAt);
+		},
+
 		async createMandate(input, change) {
 			const rows = await db.insert(mandate).values(input).returning();
 			const created = rows[0];

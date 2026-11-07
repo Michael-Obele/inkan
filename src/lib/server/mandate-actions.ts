@@ -12,6 +12,8 @@ import { amountOf, toLedgerInsert, type MandateRow } from './store';
  */
 export type MandateChange =
 	| { kind: 'revoke' }
+	/** Ends this allowance because a new one replaces it. Works even when already stopped. */
+	| { kind: 'supersede'; replacedBy: string }
 	| { kind: 'lower_ceiling'; ceilingCents: number }
 	| { kind: 'remove_merchant'; merchantId: string }
 	| { kind: 'shorten_expiry'; expiresAt: string };
@@ -56,13 +58,25 @@ export async function changeMandate(
 ): Promise<MandateChangeResult> {
 	const row = await deps.store.getMandate(mandateId);
 	if (!row) throw new MandateChangeError(404, 'no such mandate');
-	if (row.status === 'revoked')
+	// Superseding is the one change that must work on a stopped allowance, because
+	// that is the state a person is in when they need to issue a replacement.
+	if (row.status === 'revoked' && change.kind !== 'supersede')
 		throw new MandateChangeError(409, 'this mandate is already revoked');
 
 	const current = asMandate(row);
 	const now = new Date();
 
-	if (change.kind === 'revoke') {
+	if (change.kind === 'revoke' || change.kind === 'supersede') {
+		if (row.status === 'revoked') {
+			await deps.store.recordMandateEvent({
+				mandateId: row.id,
+				kind: 'revoked',
+				change: null,
+				at: now
+			});
+			return { mandate: row, liveCapabilitiesKilled: 0 };
+		}
+
 		const revoked = revokeMandate(current, now);
 		const updated = await deps.store.updateMandate(row.id, {
 			status: 'revoked',
@@ -93,7 +107,10 @@ export async function changeMandate(
 				merchantId: null,
 				paypalId: null,
 				externalId: null,
-				payload: { event: 'mandate_revoked', liveCapabilitiesKilled: killed },
+				payload:
+					change.kind === 'supersede'
+						? { event: 'mandate_superseded', replacedBy: change.replacedBy }
+						: { event: 'mandate_revoked', liveCapabilitiesKilled: killed },
 				occurredAt: now
 			})
 		);

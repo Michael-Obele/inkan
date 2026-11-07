@@ -1,9 +1,10 @@
 import * as v from 'valibot';
 import { command, query } from '$app/server';
 import { app } from '#lib/server/app';
+import { createAllowance } from '#lib/server/allowances';
 import { changeMandate } from '#lib/server/mandate-actions';
 import { money } from '#lib/money';
-import { seedMandate } from '#lib/server/seed';
+import { currentMandate } from '#lib/server/seed';
 import { agentLog } from '#lib/server/log';
 
 /**
@@ -13,7 +14,7 @@ import { agentLog } from '#lib/server/log';
  */
 export const getAllowance = query(async () => {
 	const deps = await app();
-	const mandate = await seedMandate(deps.store, deps.config);
+	const mandate = await currentMandate(deps.store, deps.config);
 
 	const captured = await deps.store.sumCaptured(mandate.id);
 	const refunded = await deps.store.sumRefunded(mandate.id);
@@ -80,7 +81,7 @@ export const lowerCeiling = command(
 	v.object({ ceilingCents: v.pipe(v.number(), v.integer(), v.minValue(1)) }),
 	async ({ ceilingCents }) => {
 		const deps = await app();
-		const mandate = await seedMandate(deps.store, deps.config);
+		const mandate = await currentMandate(deps.store, deps.config);
 
 		try {
 			const result = await changeMandate(deps, mandate.id, {
@@ -100,7 +101,7 @@ export const lowerCeiling = command(
 /** Kills the live capabilities, not a flag. The next attempt fails for that reason. */
 export const stopAgent = command(async () => {
 	const deps = await app();
-	const mandate = await seedMandate(deps.store, deps.config);
+	const mandate = await currentMandate(deps.store, deps.config);
 
 	try {
 		const result = await changeMandate(deps, mandate.id, { kind: 'revoke' });
@@ -116,3 +117,33 @@ export const stopAgent = command(async () => {
 		return { ok: false as const, error };
 	}
 });
+
+/**
+ * Issuing a replacement is the only way up, and it is a new authorization rather
+ * than an edit: new terms, a new expiry, and the old allowance ends.
+ */
+export const issueAllowance = command(
+	v.object({
+		purpose: v.string(),
+		ceilingCents: v.number(),
+		perTransactionCapCents: v.number(),
+		autoApproveAmountCents: v.number(),
+		allowedMerchants: v.array(v.string()),
+		expiresAt: v.string()
+	}),
+	async (payload) => {
+		const deps = await app();
+		try {
+			const result = await createAllowance(deps, payload);
+			if (result.ok) {
+				await getAllowance().refresh();
+				agentLog(
+					`allowance ${result.mandateId} issued, replacing ${result.replacedId ?? 'nothing'}`
+				);
+			}
+			return result;
+		} catch (cause) {
+			return { ok: false as const, issues: [refusal(cause)] };
+		}
+	}
+);

@@ -33,6 +33,19 @@ export function createMemoryStore(): Store & { reset(): void } {
 			return mandates.get(id) ?? null;
 		},
 
+		async findNewestMandate(ownerId) {
+			const rows = [...mandates.values()]
+				.filter((row) => row.ownerId === ownerId)
+				.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+			return rows[0] ?? null;
+		},
+
+		async listMandates(ownerId) {
+			return [...mandates.values()]
+				.filter((row) => row.ownerId === ownerId)
+				.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+		},
+
 		async createMandate(input: MandateInsert, _change?: unknown) {
 			const row: MandateRow = {
 				id: input.id,

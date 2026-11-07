@@ -3,15 +3,20 @@ import { command, query } from '$app/server';
 import { app } from '#lib/server/app';
 import { money } from '#lib/money';
 import { refundFromRow } from '#lib/server/refunds';
-import { DEMO_MANDATE_ID, seedMandate } from '#lib/server/seed';
+import { currentMandate, DEMO_OWNER } from '#lib/server/seed';
 
 export const getLedger = query(async () => {
 	const deps = await app();
-	await seedMandate(deps.store, deps.config);
+	const mandates = await deps.store.listMandates(DEMO_OWNER);
+	const mandate = mandates.at(-1) ?? (await currentMandate(deps.store, deps.config));
+	// Bounded on purpose: every extra allowance costs a round trip per query.
+	const live = (mandates.length > 0 ? mandates : [mandate]).slice(-10);
 
-	const mandate = await deps.store.getMandate(DEMO_MANDATE_ID);
-	const ledger = await deps.store.listLedger(DEMO_MANDATE_ID);
-	const requests = await deps.store.listRequests(DEMO_MANDATE_ID);
+	// Every allowance the owner has had, so a superseded one keeps its rows in view.
+	const ledger = (await Promise.all(live.map((row) => deps.store.listLedger(row.id))))
+		.flat()
+		.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+	const requests = (await Promise.all(live.map((row) => deps.store.listRequests(row.id)))).flat();
 
 	const receipts = new Map<string, string>();
 	for (const request of requests) {
@@ -19,8 +24,14 @@ export const getLedger = query(async () => {
 		if (receipt) receipts.set(request.id, receipt.text);
 	}
 
-	const captured = await deps.store.sumCaptured(DEMO_MANDATE_ID);
-	const refunded = await deps.store.sumRefunded(DEMO_MANDATE_ID);
+	let capturedCents = 0;
+	let refundedCents = 0;
+	for (const row of live) {
+		capturedCents += (await deps.store.sumCaptured(row.id)).cents;
+		refundedCents += (await deps.store.sumRefunded(row.id)).cents;
+	}
+	const captured = money(capturedCents);
+	const refunded = money(refundedCents);
 
 	// A capture that already has a refund row pointing at it has nothing left to reverse.
 	const alreadyRefunded = new Set(
@@ -31,8 +42,10 @@ export const getLedger = query(async () => {
 
 	return {
 		demoMode: deps.config.demoMode,
-		mandateStatus: mandate?.status ?? 'active',
-		purpose: mandate?.purpose ?? '',
+		mandateId: mandate.id,
+		mandateStatus: mandate.status,
+		purpose: mandate.purpose,
+		mandates: live.map((row) => ({ id: row.id, purpose: row.purpose, status: row.status })),
 		captured,
 		refunded,
 		rows: ledger.map((row) => ({

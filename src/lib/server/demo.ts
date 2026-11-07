@@ -4,7 +4,7 @@ import type { Config } from './config';
 import { agentLog, serviceLog } from './log';
 import type { RequestStatus } from './requests';
 import { SCENARIO, type ScenarioStep } from './scenario';
-import { DEMO_AGENT, DEMO_MANDATE_ID, seedMandate } from './seed';
+import { currentMandate, DEMO_AGENT, seedMandate } from './seed';
 import { requestPayment, type SpendDeps } from './spend';
 
 /** The three things the story is allowed to do: pay, wait for a person, refuse. */
@@ -47,8 +47,10 @@ export async function runBeat(deps: SpendDeps, stepId: string): Promise<BeatResu
 
 	agentLog(`asks: "${step.say}" (${(step.amountCents / 100).toFixed(2)} ${'USD'})`);
 
+	const mandate = await currentMandate(deps.store, deps.config);
+
 	const result = await requestPayment(deps, {
-		mandateId: DEMO_MANDATE_ID,
+		mandateId: mandate.id,
 		agentId: DEMO_AGENT,
 		request: step.say,
 		amount: money(step.amountCents),
@@ -89,8 +91,9 @@ export async function resetDemo(deps: SpendDeps & { config: Config }): Promise<v
 	if (deps.config.demoMode === 'replay') {
 		throw new Error('A replay cannot be reset. Restart with DEMO_MODE=live to rehearse.');
 	}
-	await deps.store.wipeMandate(DEMO_MANDATE_ID);
-	deps.capabilities.revokeMandate(DEMO_MANDATE_ID);
+	const current = await currentMandate(deps.store, deps.config);
+	await deps.store.wipeMandate(current.id);
+	deps.capabilities.revokeMandate(current.id);
 	await seedMandate(deps.store, deps.config);
 	agentLog('the rehearsal is wiped, the story can start again');
 }

@@ -41,7 +41,7 @@ export type EvaluationInput = {
  * part a person can inspect and a test can pin.
  */
 export function evaluate({ intent, mandate, now, committedSpend }: EvaluationInput): Decision {
-	if (mandate.status === 'revoked') {
+	if (mandate.status !== 'active') {
 		const when = mandate.revokedAt ? isoDay(mandate.revokedAt) : 'an earlier date';
 		return deny(
 			'mandate_revoked',

@@ -144,7 +144,7 @@
 				</Button>
 				<a
 					class="flex items-center justify-center gap-1 pt-1 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-					href="/"
+					href="/allowance"
 				>
 					Change the allowance instead
 				</a>

@@ -5,7 +5,7 @@ import { outcomeOf, resetDemo, runBeat } from '#lib/server/demo';
 import { money } from '#lib/money';
 import { recordedTape } from '#lib/server/paypal/recorded';
 import { SCENARIO } from '#lib/server/scenario';
-import { DEMO_MANDATE_ID, seedMandate } from '#lib/server/seed';
+import { currentMandate } from '#lib/server/seed';
 import type { RequestStatus } from '#lib/server/requests';
 
 /**
@@ -14,10 +14,10 @@ import type { RequestStatus } from '#lib/server/requests';
  */
 export const getAgentConsole = query(async () => {
 	const deps = await app();
-	const mandate = await seedMandate(deps.store, deps.config);
-	const requests = await deps.store.listRequests(DEMO_MANDATE_ID);
-	const captured = await deps.store.sumCaptured(DEMO_MANDATE_ID);
-	const refunded = await deps.store.sumRefunded(DEMO_MANDATE_ID);
+	const mandate = await currentMandate(deps.store, deps.config);
+	const requests = await deps.store.listRequests(mandate.id);
+	const captured = await deps.store.sumCaptured(mandate.id);
+	const refunded = await deps.store.sumRefunded(mandate.id);
 	// What is left of the allowance, which is the ceiling minus what is still committed.
 	const committedCents = captured.cents - refunded.cents;
 
