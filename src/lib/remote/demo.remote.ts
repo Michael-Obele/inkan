@@ -54,7 +54,8 @@ export const getAgentConsole = query(async () => {
 			ceiling: money(mandate.ceilingCents, mandate.ceilingCurrency),
 			perTransactionCap: money(mandate.perTransactionCapCents, mandate.perTransactionCapCurrency),
 			autoApproveAmount: money(mandate.autoApproveAmountCents, mandate.autoApproveAmountCurrency),
-			remaining: money(mandate.ceilingCents - committedCents, mandate.ceilingCurrency),
+			// Floored like the allowance screen: a ceiling below what is spent leaves nothing.
+			remaining: money(Math.max(0, mandate.ceilingCents - committedCents), mandate.ceilingCurrency),
 			expiresAt: mandate.expiresAt.toISOString()
 		},
 		storeSlug: deps.config.storeSlug,

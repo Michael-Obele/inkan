@@ -28,9 +28,12 @@
 
 	// Follows the server value until the person edits it, then stops.
 	let ceilingInput = $state<string | null>(null);
+	let confirmingCeiling = $state(false);
 
 	const revoked = $derived(data.mandate.status === 'revoked');
-	const remaining = $derived(data.mandate.ceiling.cents - data.spent.cents);
+	/** Room left, floored at zero: a ceiling below what is spent leaves nothing to spend. */
+	const remaining = $derived(Math.max(0, data.mandate.ceiling.cents - data.spent.cents));
+	const overCommitted = $derived(Math.max(0, data.spent.cents - data.mandate.ceiling.cents));
 	const usedPercent = $derived(
 		data.mandate.ceiling.cents === 0
 			? 0
@@ -63,6 +66,25 @@
 
 	const canSave = $derived(!busy && ceilingCheck.problem === null);
 
+	const ceilingAmount = $derived(
+		formatMoney({ cents: ceilingCheck.cents ?? 0, currency: data.mandate.ceiling.currency })
+	);
+
+	/** A ceiling at or below what is already spent leaves no room at all. */
+	const freezesSpending = $derived(
+		ceilingCheck.cents !== null &&
+			ceilingCheck.problem === null &&
+			data.spent.cents > 0 &&
+			ceilingCheck.cents <= data.spent.cents
+	);
+
+	const ceilingHint = $derived(
+		ceilingCheck.problem ??
+			(freezesSpending
+				? `At or below the ${formatMoney(data.spent)} already committed. Spending stops until refunds bring the total back under it.`
+				: ceilingRule)
+	);
+
 	const rules = $derived([
 		{ label: 'For', value: data.mandate.purpose, mono: false },
 		{ label: 'Only at', value: data.storeSlug, mono: true },
@@ -71,6 +93,15 @@
 		{ label: 'One purchase', value: formatMoney(data.mandate.perTransactionCap), mono: true },
 		{ label: 'Without asking', value: formatMoney(data.mandate.autoApproveAmount), mono: true }
 	]);
+
+	function requestCeiling() {
+		if (ceilingCheck.cents === null || ceilingCheck.problem !== null) return;
+		if (freezesSpending) {
+			confirmingCeiling = true;
+			return;
+		}
+		void saveCeiling();
+	}
 
 	async function saveCeiling() {
 		const cents = ceilingCheck.cents;
@@ -87,6 +118,7 @@
 			}
 			note = `Ceiling lowered to ${formatMoney({ cents, currency: data.mandate.ceiling.currency })}. The ledger records the change.`;
 			ceilingInput = null;
+			confirmingCeiling = false;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'the service did not answer';
 		} finally {
@@ -163,14 +195,21 @@
 
 			<div class="mt-4 h-1 w-full bg-muted" aria-hidden="true">
 				<div
-					class="h-full bg-foreground transition-[width] duration-500"
+					class="h-full transition-[width] duration-500 {overCommitted > 0
+						? 'bg-destructive'
+						: 'bg-foreground'}"
 					style="width: {usedPercent}%"
 				></div>
 			</div>
 
 			<p class="mt-2 text-xs text-muted-foreground">
-				{formatMoney(data.spent)} committed of {formatMoney(data.mandate.ceiling)}. Refunds come
-				back to the ceiling.
+				{#if overCommitted > 0}
+					Spent {formatMoney(data.spent)} against a {formatMoney(data.mandate.ceiling)} ceiling. Nothing
+					more can be spent until refunds bring the total back under it.
+				{:else}
+					{formatMoney(data.spent)} committed of {formatMoney(data.mandate.ceiling)}. Refunds come
+					back to the ceiling.
+				{/if}
 			</p>
 		</div>
 	</header>
@@ -278,12 +317,27 @@
 				<p class="border border-border bg-muted/40 px-4 py-3 text-sm">
 					This allowance is stopped. Nothing can be spent with it, and the record stays readable.
 				</p>
+			{:else if confirmingCeiling}
+				<div class="flex flex-col gap-3 border border-border bg-muted/40 p-4">
+					<p class="text-sm">
+						{ceilingAmount} is at or below the {formatMoney(data.spent)} already committed. Nothing more
+						can be spent until refunds bring the total back under it.
+					</p>
+					<div class="flex flex-wrap gap-2">
+						<Button onclick={saveCeiling} disabled={busy}>
+							{busy ? 'Saving…' : 'Yes, lower it'}
+						</Button>
+						<Button variant="outline" onclick={() => (confirmingCeiling = false)} disabled={busy}>
+							Keep it
+						</Button>
+					</div>
+				</div>
 			{:else}
 				<form
 					class="flex flex-col gap-2"
 					onsubmit={(event) => {
 						event.preventDefault();
-						void saveCeiling();
+						requestCeiling();
 					}}
 				>
 					<div class="flex flex-wrap items-end gap-3">
@@ -308,7 +362,7 @@
 					</div>
 
 					<p id="ceiling-hint" class="text-xs text-muted-foreground">
-						{ceilingCheck.problem ?? ceilingRule}
+						{ceilingHint}
 					</p>
 				</form>
 

@@ -2,8 +2,9 @@
 	import { cn } from '#lib/utils.js';
 
 	/**
-	 * A hanko, not an icon. inkan is the word for the seal a person presses onto a
-	 * document to authorise it, so the mark is the product's own explanation.
+	 * A circular stamp, not an icon. inkan is the word for the seal a person
+	 * presses onto a document to authorise it, so the mark is the product's
+	 * own explanation. Ink disc outside, paper coin inside.
 	 */
 	let {
 		size = 'md',
@@ -25,59 +26,81 @@
 
 	const display = $derived(label.toUpperCase());
 	const sub = $derived(sublabel?.toUpperCase());
+	const initials = $derived(display.replace(/[^A-Z0-9]/g, '').slice(0, 2) || 'IN');
+	const slug = $derived(
+		`${size}-${display}-${sub ?? 'plain'}`.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+	);
+	const topId = $derived(`seal-top-${slug}`);
+	const bottomId = $derived(`seal-bottom-${slug}`);
 </script>
 
-<div class={cn('shrink-0 text-seal select-none', box[size], className)} aria-hidden="true">
-	<svg viewBox="0 0 100 100" class="size-full" fill="none" aria-hidden="true">
-		<rect
-			x="1.5"
-			y="1.5"
-			width="97"
-			height="97"
+<div class={cn('shrink-0 text-foreground select-none', box[size], className)} aria-hidden="true">
+	<svg viewBox="0 0 120 120" class="size-full" aria-hidden="true">
+		<defs>
+			<path id={topId} d="M 22,60 A 38,38 0 0,1 98,60" fill="none" />
+			<path id={bottomId} d="M 22,60 A 38,38 0 0,0 98,60" fill="none" />
+		</defs>
+		<circle
+			cx="60"
+			cy="60"
+			r="58"
+			fill="none"
 			stroke="currentColor"
-			stroke-width="1.2"
-			stroke-dasharray="0.1 4.5"
+			stroke-width="1.4"
+			stroke-dasharray="0.1 5"
 			stroke-linecap="round"
-			opacity="0.9"
+			opacity="0.55"
 		/>
-		<rect x="7" y="7" width="86" height="86" stroke="currentColor" stroke-width="5" />
-		<rect x="15" y="15" width="70" height="70" stroke="currentColor" stroke-width="1.25" />
-		<circle cx="15" cy="15" r="2" fill="currentColor" />
-		<circle cx="85" cy="15" r="2" fill="currentColor" />
-		<circle cx="15" cy="85" r="2" fill="currentColor" />
-		<circle cx="85" cy="85" r="2" fill="currentColor" />
-		<text
-			x="51"
-			y={sub ? '45' : '56'}
-			text-anchor="middle"
-			dominant-baseline="middle"
-			class="font-mono"
-			font-size="16"
-			font-weight="500"
-			letter-spacing="2"
-			fill="currentColor">{display}</text
-		>
+		<circle cx="60" cy="60" r="51" fill="currentColor" />
+		<circle
+			cx="60"
+			cy="60"
+			r="47.5"
+			fill="none"
+			style="stroke: var(--background)"
+			stroke-width="1.1"
+			opacity="0.85"
+		/>
+		<text class="font-mono" font-size="10.5" letter-spacing="3" style="fill: var(--background)">
+			<textPath href={`#${topId}`} startOffset="50%" text-anchor="middle">{display}</textPath>
+		</text>
 		{#if sub}
-			<line x1="27" y1="58" x2="42" y2="58" stroke="currentColor" stroke-width="1.25" />
-			<line x1="58" y1="58" x2="73" y2="58" stroke="currentColor" stroke-width="1.25" />
-			<rect
-				x="47.2"
-				y="55.2"
-				width="5.6"
-				height="5.6"
-				transform="rotate(45 50 58)"
-				fill="currentColor"
-			/>
-			<text
-				x="51"
-				y="74"
-				text-anchor="middle"
-				dominant-baseline="middle"
-				class="font-mono"
-				font-size="10.5"
-				letter-spacing="2"
-				fill="currentColor">{sub}</text
-			>
+			<text class="font-mono" font-size="9.5" letter-spacing="3" style="fill: var(--background)">
+				<textPath href={`#${bottomId}`} startOffset="50%" text-anchor="middle">{sub}</textPath>
+			</text>
 		{/if}
+		<circle cx="23.5" cy="60" r="1.7" style="fill: var(--background)" />
+		<circle cx="96.5" cy="60" r="1.7" style="fill: var(--background)" />
+		<circle cx="60" cy="60" r="30" style="fill: var(--background)" />
+		<circle
+			cx="60"
+			cy="60"
+			r="25.5"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1"
+			opacity="0.3"
+		/>
+		<text
+			x="60"
+			y="55"
+			text-anchor="middle"
+			dominant-baseline="central"
+			class="font-heading"
+			font-size="27"
+			font-weight="500"
+			letter-spacing="1"
+			fill="currentColor">{initials}</text
+		>
+		<line x1="48" y1="74" x2="56" y2="74" stroke="currentColor" stroke-width="1" />
+		<line x1="64" y1="74" x2="72" y2="74" stroke="currentColor" stroke-width="1" />
+		<rect
+			x="57.8"
+			y="71.8"
+			width="4.4"
+			height="4.4"
+			transform="rotate(45 60 74)"
+			fill="currentColor"
+		/>
 	</svg>
 </div>

@@ -1,22 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="inkan-seal-title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="inkan-seal-title">
   <title id="inkan-seal-title">inkan seal</title>
-  <!-- Perforation hint: dotted outer frame, like a postage edge. -->
-  <rect x="1.5" y="1.5" width="97" height="97" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="0.1 4.5" stroke-linecap="round" opacity="0.9"/>
-  <!-- Outer solid frame. -->
-  <rect x="7" y="7" width="86" height="86" fill="none" stroke="currentColor" stroke-width="5"/>
-  <!-- Inner thin frame. -->
-  <rect x="15" y="15" width="70" height="70" fill="none" stroke="currentColor" stroke-width="1.25"/>
-  <!-- Corner stops on the inner frame. -->
-  <circle cx="15" cy="15" r="2" fill="currentColor"/>
-  <circle cx="85" cy="15" r="2" fill="currentColor"/>
-  <circle cx="15" cy="85" r="2" fill="currentColor"/>
-  <circle cx="85" cy="85" r="2" fill="currentColor"/>
-  <!-- Wordmark. -->
-  <text x="51" y="45" text-anchor="middle" dominant-baseline="middle" font-family="var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" font-weight="500" letter-spacing="2" fill="currentColor">INKAN</text>
-  <!-- Diamond rule. -->
-  <line x1="27" y1="58" x2="42" y2="58" stroke="currentColor" stroke-width="1.25"/>
-  <line x1="58" y1="58" x2="73" y2="58" stroke="currentColor" stroke-width="1.25"/>
-  <rect x="47.2" y="55.2" width="5.6" height="5.6" transform="rotate(45 50 58)" fill="currentColor"/>
-  <!-- Year. -->
-  <text x="51" y="74" text-anchor="middle" dominant-baseline="middle" font-family="var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="2" fill="currentColor">2026</text>
+  <defs>
+    <path id="inkan-top" d="M 22,60 A 38,38 0 0,1 98,60" fill="none"/>
+    <path id="inkan-bottom" d="M 22,60 A 38,38 0 0,0 98,60" fill="none"/>
+  </defs>
+  <!-- Perforation hint: dotted outer ring, like a postage edge. -->
+  <circle cx="60" cy="60" r="58" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="0.1 5" stroke-linecap="round" opacity="0.55"/>
+  <!-- Ink disc. -->
+  <circle cx="60" cy="60" r="51" fill="currentColor"/>
+  <circle cx="60" cy="60" r="47.5" fill="none" stroke="#ffffff" stroke-width="1.1" opacity="0.85"/>
+  <!-- Curved wordmark. -->
+  <text font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" letter-spacing="3" fill="#ffffff"><textPath href="#inkan-top" startOffset="50%" text-anchor="middle">INKAN</textPath></text>
+  <text font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9.5" letter-spacing="3" fill="#ffffff"><textPath href="#inkan-bottom" startOffset="50%" text-anchor="middle">2026</textPath></text>
+  <!-- Side stops. -->
+  <circle cx="23.5" cy="60" r="1.7" fill="#ffffff"/>
+  <circle cx="96.5" cy="60" r="1.7" fill="#ffffff"/>
+  <!-- Paper coin. -->
+  <circle cx="60" cy="60" r="30" fill="#ffffff"/>
+  <circle cx="60" cy="60" r="25.5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"/>
+  <!-- Monogram. -->
+  <text x="60" y="55" text-anchor="middle" dominant-baseline="central" font-family="Georgia, 'Times New Roman', serif" font-size="27" font-weight="500" letter-spacing="1" fill="currentColor">IN</text>
+  <line x1="48" y1="74" x2="56" y2="74" stroke="currentColor" stroke-width="1"/>
+  <line x1="64" y1="74" x2="72" y2="74" stroke="currentColor" stroke-width="1"/>
+  <rect x="57.8" y="71.8" width="4.4" height="4.4" transform="rotate(45 60 74)" fill="currentColor"/>
 </svg>
