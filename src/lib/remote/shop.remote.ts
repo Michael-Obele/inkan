@@ -1,34 +1,16 @@
 import { query } from '$app/server';
 import { app } from '#lib/server/app';
+import { CATALOG } from '#lib/server/catalog';
 import { money } from '#lib/money';
 
-/**
- * The shop the agent buys from. One merchant, so the allowlist has something
- * real to check against PayPal's own payee id.
- */
-const PRODUCTS = [
-	{
-		id: 'house-blend',
-		name: 'House blend, one bag',
-		note: 'Roasted this week. The everyday one.',
-		cents: 1800,
-		recurring: false
-	},
-	{
-		id: 'wholesale-bundle',
-		name: 'Annual wholesale bundle',
-		note: 'Twelve kilos up front, so the shop never runs out.',
-		cents: 34000,
-		recurring: false
-	},
-	{
-		id: 'subscription',
-		name: 'Monthly coffee subscription',
-		note: 'One bag a month, billed every month.',
-		cents: 500,
-		recurring: true
-	}
-];
+/** The shop the agent buys from, read from the one catalogue. */
+const PRODUCTS = CATALOG.map((item) => ({
+	id: item.id,
+	name: item.name,
+	note: item.note,
+	cents: item.amountCents,
+	recurring: item.recurring
+}));
 
 export const getShop = query(async () => {
 	const deps = await app();
