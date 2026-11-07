@@ -1,4 +1,8 @@
 import { agentLog, serviceLog } from './log';
+import { money } from '../money';
+import { asMandate } from './mandate-actions';
+import { evaluate } from './policy';
+import { committedSpendCents } from './requests';
 import { settle, type SpendDeps } from './spend';
 import { amountOf, toLedgerInsert } from './store';
 
@@ -48,6 +52,54 @@ export async function decideRequest(
 		);
 		agentLog(`human refused ${row.id}, nothing was held`);
 		return { ok: true, status: 'denied' };
+	}
+
+	// Approving is a second chance for the room to be gone: other approvals may
+	// have settled since this one was queued. Re-decide against what is committed now.
+	const mandateRow = await deps.store.getMandate(row.mandateId);
+	if (!mandateRow) return { ok: false, status: 404, reason: 'no such mandate' };
+
+	const captured = await deps.store.sumCaptured(row.mandateId);
+	const refunded = await deps.store.sumRefunded(row.mandateId);
+	const committed = money(committedSpendCents(captured.cents, refunded.cents), captured.currency);
+
+	const intent = row.intent ?? {
+		amount,
+		merchantId: row.merchantId ?? '',
+		category: 'goods',
+		recurring: false,
+		description: row.rawRequest
+	};
+	const decision = evaluate({
+		intent,
+		mandate: asMandate(mandateRow),
+		now,
+		committedSpend: committed
+	});
+
+	if (decision.verdict === 'deny') {
+		await deps.store.updateRequest(row.id, {
+			status: 'denied',
+			decidedBy: 'policy',
+			decidingRule: decision.rule,
+			reason: decision.reason,
+			resolvedAt: now
+		});
+		await deps.store.appendLedger(
+			toLedgerInsert({
+				spendRequestId: row.id,
+				mandateId: row.mandateId,
+				kind: 'denied',
+				amount,
+				merchantId: row.merchantId,
+				paypalId: null,
+				externalId: null,
+				payload: { rule: decision.rule, because: 'rechecked_on_approve' },
+				occurredAt: now
+			})
+		);
+		agentLog(`approval refused for ${row.id}: ${decision.rule}, nothing was held`);
+		return { ok: false, status: 409, reason: decision.reason };
 	}
 
 	await deps.store.updateRequest(row.id, {

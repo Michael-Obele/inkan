@@ -230,6 +230,24 @@ export async function settle(
 		throw error;
 	}
 
+	// A supersede can land while the hold is open. Re-read, and void instead of
+	// capturing money under an allowance that has already ended.
+	const latest = await deps.store.getMandate(request.mandateId);
+	if (!latest || latest.status !== 'active') {
+		await release(
+			deps,
+			request,
+			mandate,
+			amount,
+			merchantId,
+			order.orderId,
+			authorizationId,
+			'MANDATE_ENDED',
+			now
+		);
+		return { error: { issue: 'MANDATE_ENDED', body: 'the allowance ended before capture' } };
+	}
+
 	// Step 6: capture.
 	let captured;
 	try {

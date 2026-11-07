@@ -34,7 +34,7 @@ export class MandateChangeError extends Error {
 	}
 }
 
-function asMandate(row: MandateRow): Mandate {
+export function asMandate(row: MandateRow): Mandate {
 	return {
 		id: row.id,
 		ownerId: row.ownerId,
