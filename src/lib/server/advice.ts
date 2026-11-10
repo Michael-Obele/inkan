@@ -8,10 +8,7 @@ import type { Mandate } from './mandate';
  * cannot widen an allowance for itself.
  */
 export type AdviceAction =
-	| 'nothing_more_to_do'
-	| 'wait_for_a_person'
-	| 'ask_for_a_smaller_amount'
-	| 'ask_the_person';
+	'nothing_more_to_do' | 'wait_for_a_person' | 'ask_for_a_smaller_amount' | 'ask_the_person';
 
 export type Advice = {
 	action: AdviceAction;
@@ -19,8 +16,10 @@ export type Advice = {
 	next: string;
 	/** The largest amount this same request would pass at, when that is knowable. */
 	mostAllowed: Money | null;
-	/** Where the person decides, when a person is the answer. */
+	/** The card for this request, and only while a person can still act on it. */
 	approveUrl: string | null;
+	/** Where a person issues a wider allowance, when that is the only fix. */
+	newAllowanceUrl: string | null;
 };
 
 export type AdviceInput = {
@@ -30,6 +29,8 @@ export type AdviceInput = {
 	committedSpend: Money;
 	/** Known only once the request row exists, so a replayed request passes null. */
 	approveUrl?: string | null;
+	/** The screen that replaces a spent or narrow allowance. */
+	newAllowanceUrl?: string | null;
 	/** Set when a decision of `allow` did not settle, so the reply stops claiming it did. */
 	captureFailure?: { issue: string | null; body: string } | null;
 };
@@ -56,62 +57,62 @@ export function advise({
 	mandate,
 	committedSpend,
 	approveUrl,
+	newAllowanceUrl,
 	captureFailure
 }: AdviceInput): Advice {
-	const verified = approveUrl ?? null;
+	// Only an escalation has a card a person can still act on. Handing a refused
+	// request a link to its own card would send the agent somewhere that cannot help.
+	const card = decision.verdict === 'ask' ? (approveUrl ?? null) : null;
+	const renew = newAllowanceUrl ?? null;
 
 	if (decision.verdict === 'allow') {
 		if (captureFailure) {
-			const why = captureFailure.issue ? `PayPal said ${captureFailure.issue}.` : 'No reason came back.';
+			const why = captureFailure.issue
+				? `PayPal said ${captureFailure.issue}.`
+				: 'No reason came back.';
 			return {
 				action: 'ask_the_person',
 				next: `The allowance said yes but the payment did not go through. ${why} Tell the person, and do not try a different amount.`,
 				mostAllowed: null,
-				approveUrl: verified
+				approveUrl: null,
+				newAllowanceUrl: null
 			};
 		}
 		return {
 			action: 'nothing_more_to_do',
 			next: 'No approval was needed. The money has moved, and the ledger has the row.',
 			mostAllowed: null,
-			approveUrl: null
+			approveUrl: null,
+			newAllowanceUrl: null
 		};
 	}
 
 	if (decision.verdict === 'ask') {
 		return {
 			action: 'wait_for_a_person',
-			next: verified
-				? `Nothing is charged until the person decides. Tell them it is waiting at ${verified}.`
+			next: card
+				? `Nothing is charged until the person decides. Tell them it is waiting at ${card}.`
 				: 'Nothing is charged until the person decides. Tell them the request is waiting for them.',
 			mostAllowed: null,
-			approveUrl: verified
+			approveUrl: card,
+			newAllowanceUrl: null
 		};
 	}
 
 	switch (decision.rule) {
 		case 'mandate_revoked':
-			return {
-				action: 'ask_the_person',
-				next: 'This allowance was stopped, so nothing can be spent with it. Ask the person to issue a new one. You cannot issue one yourself.',
-				mostAllowed: null,
-				approveUrl: verified
-			};
+			return renewFrom(renew, 'This allowance was stopped, so nothing can be spent with it.');
 
 		case 'mandate_expired':
-			return {
-				action: 'ask_the_person',
-				next: 'This allowance has run out of time. Ask the person to issue a new one. You cannot issue one yourself.',
-				mostAllowed: null,
-				approveUrl: verified
-			};
+			return renewFrom(renew, 'This allowance has run out of time.');
 
 		case 'currency_mismatch':
 			return {
 				action: 'ask_the_person',
-				next: `This allowance only spends ${mandate.ceiling.currency}, and this request is in ${intent.amount.currency}. Ask the person for an allowance in ${intent.amount.currency}.`,
+				next: `This allowance only spends ${mandate.ceiling.currency}, and this request is in ${intent.amount.currency}. Only the person can issue an allowance in ${intent.amount.currency}.`,
 				mostAllowed: null,
-				approveUrl: verified
+				approveUrl: null,
+				newAllowanceUrl: renew
 			};
 
 		case 'merchant_not_allowed':
@@ -119,39 +120,43 @@ export function advise({
 				action: 'ask_the_person',
 				next: 'This allowance covers one shop, and this is not it. Only the person can add a shop or issue a wider allowance.',
 				mostAllowed: null,
-				approveUrl: verified
+				approveUrl: null,
+				newAllowanceUrl: renew
 			};
 
 		case 'category_not_allowed': {
 			const covered = mandate.allowedCategories.join(' and ');
 			return {
 				action: 'ask_the_person',
-				next: `This allowance covers ${covered} and this is a ${intent.category} purchase. Only the person can widen it.`,
+				next: `This allowance covers ${covered}, and this is a ${intent.category} purchase. Only the person can widen it.`,
 				mostAllowed: null,
-				approveUrl: verified
+				approveUrl: null,
+				newAllowanceUrl: renew
 			};
 		}
 
 		case 'over_per_txn_cap': {
 			const most = mostOnePurchase(mandate, committedSpend);
 			// A per-purchase refusal can really be an empty allowance in disguise.
-			if (most.cents <= 0) return nothingLeft(verified);
+			if (most.cents <= 0) return nothingLeft(renew);
 			return {
 				action: 'ask_for_a_smaller_amount',
-				next: `The most one purchase can be is ${formatMoney(most)}. Ask for that or less, and the same request will go through.`,
+				next: `The most this allowance pays in one purchase is ${formatMoney(most)}. You cannot change that limit.`,
 				mostAllowed: most,
-				approveUrl: verified
+				approveUrl: null,
+				newAllowanceUrl: renew
 			};
 		}
 
 		case 'over_ceiling': {
 			const room = roomLeft(mandate, committedSpend);
-			if (room.cents <= 0) return nothingLeft(verified);
+			if (room.cents <= 0) return nothingLeft(renew);
 			return {
 				action: 'ask_for_a_smaller_amount',
-				next: `${formatMoney(room)} is left on this allowance. Ask for that or less, or ask the person for a new allowance.`,
+				next: `${formatMoney(room)} is left on this allowance. You cannot raise it.`,
 				mostAllowed: room,
-				approveUrl: verified
+				approveUrl: null,
+				newAllowanceUrl: renew
 			};
 		}
 
@@ -160,16 +165,25 @@ export function advise({
 				action: 'ask_the_person',
 				next: 'This one is refused and the amount will not fix it. Ask the person.',
 				mostAllowed: null,
-				approveUrl: verified
+				approveUrl: null,
+				newAllowanceUrl: renew
 			};
 	}
 }
 
-function nothingLeft(approveUrl: string | null): Advice {
+/** A refusal only a new allowance can answer, with the screen that issues one. */
+function renewFrom(newAllowanceUrl: string | null, why: string): Advice {
 	return {
 		action: 'ask_the_person',
-		next: 'There is nothing left on this allowance. Ask the person for a new one. You cannot issue one yourself.',
+		next: newAllowanceUrl
+			? `${why} The person has to issue a new one at ${newAllowanceUrl}. You cannot do that yourself.`
+			: `${why} The person has to issue a new one. You cannot do that yourself.`,
 		mostAllowed: null,
-		approveUrl
+		approveUrl: null,
+		newAllowanceUrl
 	};
+}
+
+function nothingLeft(newAllowanceUrl: string | null): Advice {
+	return renewFrom(newAllowanceUrl, 'There is nothing left on this allowance.');
 }

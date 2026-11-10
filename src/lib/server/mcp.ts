@@ -28,11 +28,15 @@ function isoDay(date: Date): string {
 	return date.toISOString().slice(0, 10);
 }
 
-function build(deps: SpendDeps) {
+/** Per-request facts the tools need. The origin comes from the request, never a constant. */
+export type McpContext = { origin: string };
+
+/** Built from explicit dependencies, so a test drives the same tools with no server. */
+export function build(deps: SpendDeps) {
 	const server = new McpServer(SERVER, {
 		adapter: new ValibotJsonSchemaAdapter(),
 		capabilities: { tools: { listChanged: false } }
-	});
+	}).withContext<McpContext>();
 
 	server.tool(
 		{
@@ -136,8 +140,13 @@ function build(deps: SpendDeps) {
 
 			const mandate = await currentMandate(deps.store, deps.config);
 
+			// SvelteKit gives the endpoint the real request URL, so a link the agent hands
+			// to a person works on localhost, behind a tunnel, or on a deployment.
+			const origin = server.ctx.custom?.origin ?? deps.config.mandateBaseUrl;
+			const scoped: SpendDeps = { ...deps, config: { ...deps.config, mandateBaseUrl: origin } };
+
 			try {
-				const result = await requestPayment(deps, {
+				const result = await requestPayment(scoped, {
 					mandateId: mandate.id,
 					agentId: mandate.agentId,
 					request: reason?.trim()
@@ -166,6 +175,7 @@ function build(deps: SpendDeps) {
 					next: result.advice.next,
 					mostYouMayAskFor: show(result.advice.mostAllowed),
 					approveUrl: result.advice.approveUrl,
+					issueANewAllowanceAt: result.advice.newAllowanceUrl,
 					captureId: result.captureId ?? null
 				};
 
@@ -209,19 +219,16 @@ function build(deps: SpendDeps) {
 			const rows = await deps.store.listLedger(mandate.id);
 
 			const payload = {
-				rows: rows
-					.slice(0, limit)
-					.reverse()
-					.map((row) => ({
-						kind: row.kind,
-						amount: formatMoney({
-							cents: row.amountCents,
-							currency: row.amountCurrency ?? 'USD'
-						}),
-						at: row.occurredAt.toISOString(),
-						requestId: row.spendRequestId,
-						paypalId: row.paypalId
-					}))
+				rows: rows.slice(0, limit).map((row) => ({
+					kind: row.kind,
+					amount: formatMoney({
+						cents: row.amountCents,
+						currency: row.amountCurrency ?? 'USD'
+					}),
+					at: row.occurredAt.toISOString(),
+					requestId: row.spendRequestId,
+					paypalId: row.paypalId
+				}))
 			};
 
 			return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }] };

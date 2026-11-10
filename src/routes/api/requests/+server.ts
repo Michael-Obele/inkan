@@ -13,7 +13,12 @@ export const POST: RequestHandler = async ({ request }) => {
 	if (!parsed.ok) return failure(400, 'invalid request payload', parsed.issues);
 
 	try {
-		const deps = await app();
+		const wired = await app();
+		// Advice carries links back to this service, so it uses the origin the caller used.
+		const deps = {
+			...wired,
+			config: { ...wired.config, mandateBaseUrl: new URL(request.url).origin }
+		};
 		const result = await requestPayment(deps, parsed.value);
 		return ok({
 			requestId: result.requestId,
@@ -26,7 +31,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				action: result.advice.action,
 				next: result.advice.next,
 				mostAllowed: result.advice.mostAllowed ?? null,
-				approveUrl: result.advice.approveUrl ?? null
+				approveUrl: result.advice.approveUrl ?? null,
+				newAllowanceUrl: result.advice.newAllowanceUrl ?? null
 			},
 			captureId: result.captureId ?? null,
 			captureError: result.captureError ?? null

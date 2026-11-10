@@ -6,7 +6,10 @@ import { advise } from './advice';
 
 const NOW = new Date('2026-11-06T12:00:00.000Z');
 const PAYEE = '8NJ2CK2C6DN3S';
-const APPROVE = 'http://localhost:5173/approve/req_1';
+/** Reserved by RFC 2606, so these can never be mistaken for the real deployment. */
+const ORIGIN = 'https://inkan.test';
+const APPROVE = `${ORIGIN}/approve/req_1`;
+const RENEW = `${ORIGIN}/allowance/new`;
 
 function buildMandate(overrides: Partial<Mandate> = {}): Mandate {
 	return {
@@ -56,7 +59,8 @@ function run(
 		intent,
 		mandate,
 		committedSpend,
-		approveUrl: APPROVE,
+		approveUrl: `${ORIGIN}/approve/req_1`,
+		newAllowanceUrl: `${ORIGIN}/allowance/new`,
 		captureFailure: overrides.captureFailure
 	});
 }
@@ -88,7 +92,8 @@ describe('advice', () => {
 	it('says a revoked allowance needs a person, not a retry', () => {
 		const advice = run({ mandate: { status: 'revoked', revokedAt: NOW } });
 		expect(advice.action).toBe('ask_the_person');
-		expect(advice.next).toContain('cannot issue one yourself');
+		expect(advice.next).toContain('cannot do that yourself');
+		expect(advice.approveUrl).toBeNull();
 	});
 
 	it('says an expired allowance needs a person', () => {

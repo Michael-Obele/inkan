@@ -7,7 +7,8 @@ import { mcp } from '#lib/server/mcp';
  */
 const handle: RequestHandler = async ({ request }) => {
 	const transport = await mcp();
-	const response = await transport.respond(request);
+	// The origin is read from the request SvelteKit received, so nothing is hardcoded.
+	const response = await transport.respond(request, { origin: new URL(request.url).origin });
 	return response ?? new Response('Not found', { status: 404 });
 };
 

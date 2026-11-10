@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="inkan: a control plane for AI agent payments">
+	<rect width="1200" height="300" fill="#14110f" />
+
+	<!-- the seal: ink ring, paper coin, the mark the whole product is named after -->
+	<circle cx="150" cy="150" r="92" fill="none" stroke="#f4efe6" stroke-width="2" stroke-dasharray="0.6 9" stroke-linecap="round" opacity="0.45" />
+	<circle cx="150" cy="150" r="78" fill="#f4efe6" />
+	<circle cx="150" cy="150" r="70" fill="none" stroke="#14110f" stroke-width="1.2" opacity="0.35" />
+	<text x="150" y="164" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="44" letter-spacing="3" fill="#14110f">IN</text>
+
+	<!-- wordmark -->
+	<text x="284" y="132" font-family="Georgia, 'Times New Roman', serif" font-size="72" letter-spacing="-1.5" fill="#f4efe6">inkan</text>
+	<line x1="286" y1="158" x2="1140" y2="158" stroke="#c8452f" stroke-width="3" />
+	<text x="284" y="196" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" fill="#f4efe6" fill-opacity="0.78">A control plane for agent spending. The agent asks, a person decides, the ledger keeps the row.</text>
+	<text x="284" y="234" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" letter-spacing="2.2" fill="#c8452f">PAYPAL SANDBOX · SVELTEKIT 3 · MCP</text>
+</svg>

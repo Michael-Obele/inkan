@@ -457,7 +457,8 @@ export async function requestPayment(
 				intent,
 				mandate: terms,
 				committedSpend: committed,
-				approveUrl: approvalUrl(deps.config, existing.id)
+				approveUrl: approvalUrl(deps.config, existing.id),
+				newAllowanceUrl: renewUrl(deps.config)
 			})
 		};
 	}
@@ -521,7 +522,14 @@ export async function requestPayment(
 		verdict: decision.verdict,
 		rule: decision.rule,
 		reason: decision.reason,
-		advice: advise({ decision, intent, mandate: terms, committedSpend: committed, approveUrl })
+		advice: advise({
+			decision,
+			intent,
+			mandate: terms,
+			committedSpend: committed,
+			approveUrl,
+			newAllowanceUrl: renewUrl(deps.config)
+		})
 	};
 
 	if (decision.verdict !== 'allow') return result;
@@ -532,7 +540,14 @@ export async function requestPayment(
 			...result,
 			status: 'captured',
 			captureId: settled.captureId,
-			advice: advise({ decision, intent, mandate: terms, committedSpend: committed, approveUrl })
+			advice: advise({
+				decision,
+				intent,
+				mandate: terms,
+				committedSpend: committed,
+				approveUrl,
+				newAllowanceUrl: renewUrl(deps.config)
+			})
 		};
 
 	return {
@@ -545,6 +560,7 @@ export async function requestPayment(
 			mandate: terms,
 			committedSpend: committed,
 			approveUrl,
+			newAllowanceUrl: renewUrl(deps.config),
 			captureFailure: settled.error
 		})
 	};
@@ -553,6 +569,11 @@ export async function requestPayment(
 /** Where a person decides. The id is random, so the link is not guessable. */
 function approvalUrl(config: Config, requestId: string): string {
 	return `${config.mandateBaseUrl.replace(/\/+$/, '')}/approve/${requestId}`;
+}
+
+/** Where a person replaces a spent or stopped allowance. */
+function renewUrl(config: Config): string {
+	return `${config.mandateBaseUrl.replace(/\/+$/, '')}/allowance/new`;
 }
 
 function maybeCurrency(value: string | null | undefined): string {
