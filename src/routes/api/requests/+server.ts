@@ -21,6 +21,13 @@ export const POST: RequestHandler = async ({ request }) => {
 			verdict: result.verdict,
 			rule: result.rule,
 			reason: result.reason,
+			// What the caller can do about it, so a refusal is not a dead end.
+			advice: {
+				action: result.advice.action,
+				next: result.advice.next,
+				mostAllowed: result.advice.mostAllowed ?? null,
+				approveUrl: result.advice.approveUrl ?? null
+			},
 			captureId: result.captureId ?? null,
 			captureError: result.captureError ?? null
 		});

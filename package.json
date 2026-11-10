@@ -56,8 +56,11 @@
 		"@fontsource-variable/ibm-plex-sans": "^5.3.0",
 		"@fontsource-variable/source-serif-4": "^5.3.1",
 		"@fontsource/ibm-plex-mono": "^5.3.0",
+		"@tmcp/adapter-valibot": "^0.1.7",
+		"@tmcp/transport-http": "^0.9.1",
 		"mode-watcher": "^1.1.0",
 		"sv-agentation": "^0.4.0",
+		"tmcp": "^1.20.1",
 		"valibot": "^1.5.0"
 	}
 }

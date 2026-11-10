@@ -2,7 +2,9 @@ import type { Config } from './config';
 import { merchantIdFor } from './config';
 import { createStore, type CapabilityStore } from './capability';
 import { money, type Money } from '../money';
-import { evaluate, type Intent } from './policy';
+import { advise, type Advice } from './advice';
+import type { Mandate } from './mandate';
+import { evaluate, type Decision, type Intent } from './policy';
 import type { PayPalClient } from './paypal/client';
 import { PayPalError } from './paypal/client';
 import {
@@ -34,6 +36,8 @@ export type RequestPaymentResult = {
 	verdict: 'allow' | 'ask' | 'deny';
 	rule: string;
 	reason: string;
+	/** What the agent can do about it. A refusal that carries no fix is a wall. */
+	advice: Advice;
 	captureId?: string;
 	captureError?: { issue: string | null; body: string };
 };
@@ -400,17 +404,6 @@ export async function requestPayment(
 		merchantId
 	});
 
-	const existing = await deps.store.findRequestByKey(key);
-	if (existing) {
-		return {
-			requestId: existing.id,
-			status: existing.status as RequestStatus,
-			verdict: (existing.verdict ?? 'ask') as 'allow' | 'ask' | 'deny',
-			rule: existing.decidingRule ?? 'needs_human',
-			reason: existing.reason ?? 'This request was already received.'
-		};
-	}
-
 	const intent: Intent = {
 		amount: input.amount,
 		merchantId,
@@ -423,25 +416,55 @@ export async function requestPayment(
 	const refunded = await deps.store.sumRefunded(mandate.id);
 	const committed = money(committedSpendCents(captured.cents, refunded.cents), captured.currency);
 
+	// The same view of the mandate reaches the rule engine and the advice writer, so
+	// the sentence and the verdict cannot disagree about a number.
+	const terms: Mandate = {
+		id: mandate.id,
+		ownerId: mandate.ownerId,
+		agentId: mandate.agentId,
+		purpose: mandate.purpose,
+		allowedCategories: mandate.allowedCategories,
+		ceiling: money(mandate.ceilingCents, mandate.ceilingCurrency),
+		perTransactionCap: money(mandate.perTransactionCapCents, mandate.perTransactionCapCurrency),
+		autoApproveAmount: money(
+			mandate.autoApproveAmountCents,
+			maybeCurrency(mandate.autoApproveAmountCurrency)
+		),
+		allowedMerchants: mandate.allowedMerchants,
+		expiresAt: mandate.expiresAt,
+		status: mandate.status,
+		revokedAt: mandate.revokedAt
+	};
+
+	const existing = await deps.store.findRequestByKey(key);
+	if (existing) {
+		// A retry must not become a second payment, and it must not become a second
+		// story either, so the stored decision is answered the same way it was first.
+		const remembered: Decision = {
+			verdict: (existing.verdict ?? 'ask') as Decision['verdict'],
+			rule: (existing.decidingRule ?? 'needs_human') as Decision['rule'],
+			reason: existing.reason ?? 'This request was already received.'
+		};
+
+		return {
+			requestId: existing.id,
+			status: existing.status as RequestStatus,
+			verdict: remembered.verdict,
+			rule: remembered.rule,
+			reason: remembered.reason,
+			advice: advise({
+				decision: remembered,
+				intent,
+				mandate: terms,
+				committedSpend: committed,
+				approveUrl: approvalUrl(deps.config, existing.id)
+			})
+		};
+	}
+
 	const decision = evaluate({
 		intent,
-		mandate: {
-			id: mandate.id,
-			ownerId: mandate.ownerId,
-			agentId: mandate.agentId,
-			purpose: mandate.purpose,
-			allowedCategories: mandate.allowedCategories,
-			ceiling: money(mandate.ceilingCents, mandate.ceilingCurrency),
-			perTransactionCap: money(mandate.perTransactionCapCents, mandate.perTransactionCapCurrency),
-			autoApproveAmount: money(
-				mandate.autoApproveAmountCents,
-				maybeCurrency(mandate.autoApproveAmountCurrency)
-			),
-			allowedMerchants: mandate.allowedMerchants,
-			expiresAt: mandate.expiresAt,
-			status: mandate.status,
-			revokedAt: mandate.revokedAt
-		},
+		mandate: terms,
 		now: at,
 		committedSpend: committed
 	});
@@ -490,20 +513,46 @@ export async function requestPayment(
 		})
 	);
 
+	const approveUrl = approvalUrl(deps.config, row.id);
+
 	const result: RequestPaymentResult = {
 		requestId: row.id,
 		status: row.status as RequestStatus,
 		verdict: decision.verdict,
 		rule: decision.rule,
-		reason: decision.reason
+		reason: decision.reason,
+		advice: advise({ decision, intent, mandate: terms, committedSpend: committed, approveUrl })
 	};
 
 	if (decision.verdict !== 'allow') return result;
 
 	const settled = await settle(deps, row.id);
 	if ('captureId' in settled)
-		return { ...result, status: 'captured', captureId: settled.captureId };
-	return { ...result, status: 'failed', captureError: settled.error };
+		return {
+			...result,
+			status: 'captured',
+			captureId: settled.captureId,
+			advice: advise({ decision, intent, mandate: terms, committedSpend: committed, approveUrl })
+		};
+
+	return {
+		...result,
+		status: 'failed',
+		captureError: settled.error,
+		advice: advise({
+			decision,
+			intent,
+			mandate: terms,
+			committedSpend: committed,
+			approveUrl,
+			captureFailure: settled.error
+		})
+	};
+}
+
+/** Where a person decides. The id is random, so the link is not guessable. */
+function approvalUrl(config: Config, requestId: string): string {
+	return `${config.mandateBaseUrl.replace(/\/+$/, '')}/approve/${requestId}`;
 }
 
 function maybeCurrency(value: string | null | undefined): string {
