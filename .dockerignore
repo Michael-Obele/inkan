@@ -1,0 +1,30 @@
+# Everything the image does not need. Without this, .env and the private docs
+# would be copied into a build layer, and the image would grow by megabytes of
+# files the server never reads.
+
+.git
+.github
+.vscode
+.svelte-kit
+build
+
+node_modules
+
+# Secrets. The image gets its values from Fly secrets at runtime.
+.env
+.env.*
+!.env.example
+runner/.env
+runner/.env.*
+!.env.example
+
+# Private plan and reasoning. Never shipped, never published.
+docs
+.superpowers
+.scratch
+
+# Local noise
+*.log
+.DS_Store
+Thumbs.db
+tmp-*.ts

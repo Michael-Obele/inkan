@@ -1,0 +1,69 @@
+# inkan, on Fly.io.
+#
+# Re-authored by hand after `fly launch` generated a minimal version, so the reason
+# for each setting survives. Validate with `fly config validate` after editing.
+
+app = 'inkan'
+
+# iad is the code for Ashburn, Virginia. It is not a placeholder, and it is one of
+# the seven North American regions that survived Fly's consolidation, so it will
+# not be migrated out from under this app. It also shares a metro with the
+# database when one is configured: the Neon host is us-east-1, which is Northern
+# Virginia too.
+primary_region = 'iad'
+
+# SIGTERM lets the Bun server drain in-flight requests. It waits SHUTDOWN_TIMEOUT
+# (10s, set in the Dockerfile), so this has to outlast it.
+kill_signal = 'SIGTERM'
+kill_timeout = '15s'
+
+[build]
+
+[env]
+# The Bun server reads PORT and HOST. 8080 matches internal_port below.
+PORT = '8080'
+HOST = '0.0.0.0'
+# DEMO_MODE and DATABASE_URL are both absent on purpose, and that is the whole
+# deploy story. With no PayPal values the app replays the recorded run, so it
+# answers on a public URL before any secret exists. Add the PayPal secrets and
+# the same image runs live, with the ledger in memory and no database to create.
+
+[http_service]
+internal_port = 8080
+force_https = true
+
+# Suspend, not stop. A suspended machine keeps its memory on disk, so the ledger
+# survives going idle and a resume takes a few hundred milliseconds instead of a
+# cold boot. Stopping would throw the ledger away on the first quiet minute.
+#
+# Both suspend requirements are met: no swap_size_mb, and a machine created after
+# June 2024. Snapshots are not guaranteed across a deploy, which is the one case
+# that begins a fresh allowance; the app re-seeds itself, so it degrades to
+# working rather than to broken.
+auto_stop_machines = 'suspend'
+auto_start_machines = true
+min_machines_running = 0
+
+# A recorded page comes from memory and a live decision is a few HTTPS calls, so
+# the request budget is small on purpose.
+[http_service.concurrency]
+type = 'requests'
+soft_limit = 10
+hard_limit = 25
+
+[[http_service.checks]]
+# The tested health module, the same one the test suite asserts. A green deploy
+# means the app answered a real request, not just that the process started.
+method = 'GET'
+path = '/api/health'
+interval = '30s'
+timeout = '5s'
+grace_period = '10s'
+
+[[vm]]
+# 1 shared vCPU, 256 MB, the smallest machine Fly offers. Measured before
+# choosing it: the production server peaks at 72 MB RSS with every route warm.
+size = 'shared-cpu-1x'
+memory = '256mb'
+cpu_kind = 'shared'
+cpus = 1
