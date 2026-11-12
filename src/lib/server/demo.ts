@@ -4,7 +4,7 @@ import type { Config } from './config';
 import { agentLog, serviceLog } from './log';
 import type { RequestStatus } from './requests';
 import { SCENARIO, type ScenarioStep } from './scenario';
-import { currentMandate, DEMO_AGENT, seedMandate } from './seed';
+import { currentMandate, DEMO_AGENT, DEMO_OWNER, seedMandate } from './seed';
 import { requestPayment, type SpendDeps } from './spend';
 
 /** The three things the story is allowed to do: pay, wait for a person, refuse. */
@@ -91,9 +91,15 @@ export async function resetDemo(deps: SpendDeps & { config: Config }): Promise<v
 	if (deps.config.demoMode === 'replay') {
 		throw new Error('A replay cannot be reset. Restart with DEMO_MODE=live to rehearse.');
 	}
-	const current = await currentMandate(deps.store, deps.config);
-	await deps.store.wipeMandate(current.id);
-	deps.capabilities.revokeMandate(current.id);
+
+	// Every mandate, not just the newest. A leftover revoked row from an earlier run
+	// makes the seed return that dead allowance, and the story can never restart.
+	const history = await deps.store.listMandates(DEMO_OWNER);
+	for (const row of history) {
+		await deps.store.wipeMandate(row.id);
+		deps.capabilities.revokeMandate(row.id);
+	}
+
 	await seedMandate(deps.store, deps.config);
 	agentLog('the rehearsal is wiped, the story can start again');
 }

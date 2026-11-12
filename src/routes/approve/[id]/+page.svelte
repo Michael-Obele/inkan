@@ -13,6 +13,7 @@
 
 	let busy = $state(false);
 	let error = $state<string | null>(null);
+	let note = $state<string | null>(null);
 
 	const decided = $derived(data.request.status !== 'pending');
 
@@ -23,6 +24,11 @@
 			const result = await decideApproval({ requestId: data.request.id, action });
 			if (!result.ok) {
 				error = result.error;
+				return;
+			}
+			// A recording says so and stays on the card, so the reason is readable.
+			if (result.note) {
+				note = result.note;
 				return;
 			}
 			await goto('/ledger');
@@ -144,12 +150,15 @@
 				</Button>
 				<a
 					class="flex items-center justify-center gap-1 pt-1 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-					href="/allowance"
+					href="/allowance/new"
 				>
 					Change the allowance instead
 				</a>
 			{/if}
 
+			{#if note}
+				<p class="border border-border bg-muted/40 px-4 py-3 text-sm">{note}</p>
+			{/if}
 			{#if error}<p class="text-sm text-destructive">{error}</p>{/if}
 		</Card.Footer>
 	</Card.Root>

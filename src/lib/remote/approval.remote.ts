@@ -90,7 +90,8 @@ export const decideApproval = command(
 		return {
 			ok: true as const,
 			status: result.status,
-			captureId: 'captureId' in result ? result.captureId : null
+			captureId: 'captureId' in result ? result.captureId : null,
+			note: 'reason' in result ? result.reason : null
 		};
 	}
 );

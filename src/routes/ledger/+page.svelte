@@ -55,8 +55,8 @@
 		</h1>
 
 		<p class="max-w-xl text-pretty text-muted-foreground">
-			Nothing here is edited or removed. A refusal is a row, not a silence, and a refund is a new
-			row that points at the payment it reverses.
+			Nothing here is rewritten. A refusal is a row, not a silence, and a refund is a new row that
+			points at the payment it reverses.
 		</p>
 	</header>
 

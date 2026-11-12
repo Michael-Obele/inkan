@@ -12,6 +12,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	try {
 		const deps = await app();
+
+		// A recording has no live PayPal to verify against, so it says so instead of
+		// failing deep inside the tape and looking like a broken receiver.
+		if (deps.config.demoMode === 'replay') {
+			return failure(503, 'this run is a recording, so no live webhook can be verified');
+		}
+
 		const outcome = await handleWebhook(
 			{ store: deps.store, paypal: deps.paypal },
 			webhookHeaders(request.headers),

@@ -34,10 +34,22 @@
 	let asked = $state<{ status: string; rule: string | null; reason: string | null } | null>(null);
 	let askNote = $state<string | null>(null);
 
-	const toneOf = (status: string): 'success' | 'warning' | 'danger' =>
-		status === 'captured' ? 'success' : status === 'pending' ? 'warning' : 'danger';
+	const toneOf = (status: string): 'success' | 'warning' | 'danger' | 'neutral' =>
+		status === 'captured'
+			? 'success'
+			: status === 'pending'
+				? 'warning'
+				: status === 'allowed'
+					? 'neutral'
+					: 'danger';
 	const labelOf = (status: string) =>
-		status === 'captured' ? 'Paid' : status === 'pending' ? 'Waiting for you' : 'Refused';
+		status === 'captured'
+			? 'Paid'
+			: status === 'pending'
+				? 'Waiting for you'
+				: status === 'allowed'
+					? 'Allowed, not charged'
+					: 'Refused';
 
 	async function readSentence() {
 		asking = true;
@@ -62,10 +74,7 @@
 		try {
 			const result = await askTheAgent({ text: askText, send: true });
 			if (!result.ok) {
-				askNote =
-					result.reason === 'replay'
-						? 'The recorded run cannot take a new request. Start with DEMO_MODE=live.'
-						: 'The agent only knows the three things in the shop.';
+				askNote = 'The agent only knows the three things in the shop.';
 				return;
 			}
 			reading = result.answer;
@@ -75,6 +84,10 @@
 				rule: result.outcome.rule,
 				reason: result.outcome.reason
 			};
+			// A recording writes the real decision but cannot charge, and says so here.
+			if (result.outcome.status === 'allowed') {
+				askNote = 'The rule table allowed it. This run is a recording, so nothing was charged.';
+			}
 		} finally {
 			asking = false;
 		}
@@ -123,8 +136,8 @@
 			.filter((row) => row.answer?.actual === 'waiting')
 	);
 
-	async function run(stepId: string) {
-		busy = stepId;
+	async function run(stepId: string, drivenByAll = false) {
+		if (!drivenByAll) busy = stepId;
 		error = null;
 		try {
 			const answer = await runBeatNow({ stepId });
@@ -143,7 +156,7 @@
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'the service did not answer';
 		} finally {
-			busy = null;
+			if (!drivenByAll) busy = null;
 		}
 	}
 
@@ -151,7 +164,9 @@
 		busy = 'all';
 		ranAll = false;
 		for (const beat of data.beats) {
-			await run(beat.id);
+			// The card for the beat in flight says Working, so the run has a position.
+			busy = beat.id;
+			await run(beat.id, true);
 		}
 		busy = null;
 		ranAll = true;
@@ -353,7 +368,11 @@
 									onclick={() => run(beat.id)}
 									disabled={busy !== null}
 								>
-									{busy === beat.id ? 'Working…' : answer ? 'Run it again' : 'Run this beat'}
+									{busy === beat.id || (!answer && busy === 'all')
+										? 'Working…'
+										: answer
+											? 'Run it again'
+											: 'Run this beat'}
 								</Button>
 
 								{#if answer?.actual === 'waiting'}

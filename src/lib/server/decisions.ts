@@ -13,6 +13,8 @@ import { amountOf, toLedgerInsert } from './store';
 export type DecisionResult =
 	| { ok: true; status: 'denied' }
 	| { ok: true; status: 'captured'; captureId: string }
+	/** Recorded, but nothing was charged, because the run is a recording. */
+	| { ok: true; status: 'recorded'; reason: string }
 	| { ok: false; status: number; reason: string; detail?: unknown };
 
 export async function decideRequest(
@@ -124,6 +126,18 @@ export async function decideRequest(
 	);
 
 	serviceLog(`human approved ${row.id}, settling ${amount.cents}c`);
+
+	// A recording has no live PayPal behind it, so settling would fail and the screen
+	// would blame PayPal. The decision is real and stays on the ledger; the charge is
+	// the one thing a recording cannot do, and it says so instead of inventing a refusal.
+	if (deps.config.demoMode === 'replay') {
+		return {
+			ok: true,
+			status: 'recorded',
+			reason:
+				'Approved and written to the ledger. This run is a recording, so no money moved. Start it with sandbox keys to settle for real.'
+		};
+	}
 
 	try {
 		const settled = await settle(deps, row.id);

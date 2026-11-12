@@ -28,7 +28,8 @@ type Facts = {
 const SYSTEM = [
 	'You write one short receipt for a purchase an AI agent made.',
 	'Use plain everyday words. No em dashes. Two sentences at most.',
-	'State what was bought, who was paid, how much, and why it was allowed or refused.',
+	'The facts already say whether it went through, so do not restate the outcome and do not repeat the reason word for word.',
+	'State what was bought, who was paid, how much, and one thing a person would want to know.',
 	'Never invent a product, a price or a merchant that is not in the facts.',
 	'Do not use the words mandate, capability, policy engine or ledger.'
 ].join(' ');
@@ -54,15 +55,19 @@ export async function writeReceipt(
 		monthly: request.intent?.recurring ? formatMonthly(amount.cents, amount.currency) : null
 	};
 
-	const model = deps.config.modelApiKey ? deps.config.modelName : 'template';
-	const text = deps.config.modelApiKey
-		? await ask(deps.config, facts, deps.fetchImpl ?? fetch).catch(() => template(facts))
-		: template(facts);
+	const wanted = Boolean(deps.config.modelApiKey);
+	// A reasoning model spends tokens thinking before it writes, so a tight cap returns
+	// empty content. The budget has to cover the reasoning and the answer.
+	const asked = wanted
+		? await ask(deps.config, facts, deps.fetchImpl ?? fetch).catch(() => null)
+		: null;
 
+	// The author is whichever thing actually wrote the words. Labelling a template
+	// fallback with the model's name would make the record claim something untrue.
 	const stored = await deps.store.writeReceipt({
 		spendRequestId: input.spendRequestId,
-		text,
-		model
+		text: asked ?? template(facts),
+		model: asked ? deps.config.modelName : 'template'
 	});
 	return { text: stored.text, model: stored.model };
 }
@@ -76,7 +81,10 @@ async function ask(config: Config, facts: Facts, fetchImpl: typeof fetch): Promi
 		},
 		body: JSON.stringify({
 			model: config.modelName,
-			max_tokens: 120,
+			// Enough for a reasoning pass plus two short sentences. At 120 this model
+			// returned empty content on every call, because the reasoning used the whole
+			// budget, and the receipt silently fell back to a template.
+			max_tokens: 600,
 			temperature: 0.2,
 			messages: [
 				{ role: 'system', content: SYSTEM },
@@ -95,21 +103,20 @@ async function ask(config: Config, facts: Facts, fetchImpl: typeof fetch): Promi
 /** The fallback says the same facts in the same number of words. */
 export function template(facts: Facts): string {
 	const who = facts.merchantEmail ?? 'the shop';
-	const outcome =
-		facts.status === 'denied'
-			? 'It was refused.'
-			: facts.status === 'captured'
-				? 'It went through.'
-				: 'It is waiting for you.';
 
-	const why =
-		facts.status === 'denied'
-			? `Reason: ${facts.reason}`
-			: facts.recurring
-				? `This is a repeat charge of about ${facts.monthly} a month.`
-				: facts.reason;
+	if (facts.status === 'denied') {
+		return `${facts.amount} to ${who} was refused. Reason: ${facts.reason}`;
+	}
 
-	return `${facts.amount} to ${who}. ${outcome} ${why}`;
+	// A repeat charge leads with the monthly cost, because that is the fact a person
+	// would otherwise have to work out for themselves.
+	if (facts.status === 'captured' && facts.recurring && facts.monthly) {
+		return `${facts.amount} to ${who}, which is about ${facts.monthly} a month. It went through.`;
+	}
+
+	if (facts.status === 'captured') return `${facts.amount} to ${who}. It went through.`;
+
+	return `${facts.amount} to ${who} is waiting for you. Nothing has been charged.`;
 }
 
 function format(cents: number, currency: string): string {

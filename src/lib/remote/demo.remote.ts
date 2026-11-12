@@ -135,11 +135,6 @@ export const askTheAgent = command(
 
 		if (!send) return { ok: true as const, sent: false as const, answer };
 
-		// A recorded run is a fixed sequence, so a new request would desync the tape.
-		if (deps.config.demoMode === 'replay') {
-			return { ok: false as const, reason: 'replay' as const, answer };
-		}
-
 		const mandate = await currentMandate(deps.store, deps.config);
 		const result = await requestPayment(deps, {
 			mandateId: mandate.id,
