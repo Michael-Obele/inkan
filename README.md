@@ -26,6 +26,7 @@ Built for the PayPal AI Hackathon 2026.
 - [Tools](#tools)
 - [The HTTP surface](#the-http-surface)
 - [How a person would link a payment method](#how-a-person-would-link-a-payment-method)
+- [Deploy](#deploy)
 - [What this does not do](#what-this-does-not-do)
 - [Licence](#licence)
 
@@ -237,28 +238,63 @@ Cases 5 and 7 are the ones worth reading twice. They are the only two that move 
 
 Requires [Bun](https://bun.sh). Bun is the only package manager here.
 
+### First: the whole story, with no keys and no database
+
+A clone with no `.env` runs the recorded sandbox session by itself. Nothing to configure, no Postgres,
+no PayPal account, no network.
+
 ```bash
 bun install
-cp .env.example .env        # sandbox keys, store merchant id, database
-bun run db:migrate
 bun run dev                 # http://localhost:5173
 ```
 
-Then, in a second terminal, start the agent. It holds no PayPal credential and says so:
+That is the entire setup. Every screen works, the four beats on `/demo` run against recorded sandbox
+answers, the approval card can be allowed or refused, and the ledger can be refunded. A banner on every
+page says it is a replay, and the agent console names the recorded call under each result.
+
+Connecting an MCP client to that same URL gives you `get_allowance` and `read_ledger` from the
+recorded run. A purchase that the rule table allows reports `allowed, not charged in this recording`,
+because a recording has no money to move. Refusals and escalations answer exactly as they do live.
+
+### Then: the live sandbox path, still with no database
+
+A live run needs PayPal credentials. It does **not** need a database: the ledger lives in the process,
+and the `Store` interface is the same one Postgres implements. So the whole live path is one file.
 
 ```bash
-bun --env-file=.env runner/src/index.ts
+cp .env.example .env        # then paste your sandbox client secret into one field
+bun run dev                 # http://localhost:5173
 ```
 
-Every attempt appears on `/ledger`, the ones that were refused included.
+Everything except the client secret is already filled in, because everything else is not a secret:
+the test card is PayPal's own published test card, the merchant id is an identifier rather than a
+credential and is already named in the recording, and the store slug is a handle. The client secret is
+blank on purpose. PayPal's getting-started guide says never to commit it, and the people judging this
+wrote that guide. Get one from Developer Dashboard, Apps and Credentials, Sandbox.
 
-### The replay, with no keys and no database
+Set `DATABASE_URL` and the ledger moves to Postgres automatically, with no code change. Do that if you
+want rows to survive a restart, and run `bun run db:migrate` once first.
+
+Start the agent in a second terminal. It holds no PayPal credential and says so:
 
 ```bash
-DEMO_MODE=replay bun run dev
+bun run runner
 ```
 
-The allowance, the ledger and the approval screen fill from recorded sandbox answers, and the screen says it is a replay. The recording was made by `bun --env-file=.env tools/record-tape.ts`, which runs one real purchase and one real refund through the real client.
+The script passes `runner/.env.example` explicitly, because Bun loads the repository `.env` by default
+and that file holds the PayPal secrets. Running the runner any other way makes it refuse to start,
+which is the point: the first thing it prints is `paypal credentials present: 0`. Every attempt
+appears on `/ledger`, the refused ones included.
+
+To force either mode regardless of keys:
+
+```bash
+DEMO_MODE=replay bun run dev     # recorded run, even with a database configured
+DEMO_MODE=live   bun run dev     # real sandbox, and it will refuse to start without keys
+```
+
+The recording was made by `bun --env-file=.env tools/record-tape.ts`, which runs one real purchase and
+one real refund through the real client.
 
 ### Test accounts
 
@@ -282,21 +318,27 @@ The model does exactly two jobs: turn the agent's prose into structured fields, 
 
 ## The HTTP surface
 
-The MCP server is one route among nine. The rest are the machine surface behind the dashboard, and
-the same rule applies to all of them: one module reads the PayPal credentials, and the agent never
-sees it.
+Four routes. Everything the dashboard does goes through SvelteKit remote functions, which are not
+public HTTP endpoints, so there is no second API to keep in sync with the first.
 
-| Route                       | What it is for                                 |
-| --------------------------- | ---------------------------------------------- |
-| `GET /api/health`           | A tested health payload                        |
-| `GET /api/mandates`         | The allowance in force                         |
-| `PATCH /api/mandates/[id]`  | Narrow or revoke one allowance                 |
-| `POST /api/requests`        | Ask for permission to spend. The runner's door |
-| `POST /api/decisions/[id]`  | A human decision, recorded with the rule       |
-| `GET /api/ledger`           | The append-only read model                     |
-| `POST /api/refunds`         | A human refund, from the row it reverses       |
-| `POST /api/webhooks/paypal` | Signature verified before anything is believed |
-| `POST /api/mcp`             | The MCP endpoint, Streamable HTTP              |
+| Route                       | Who calls it                                 |
+| --------------------------- | -------------------------------------------- |
+| `POST /api/mcp`             | Any MCP client. Streamable HTTP, three tools |
+| `POST /api/requests`        | The scenario runner, and nothing else        |
+| `GET /api/health`           | The platform's health check                  |
+| `POST /api/webhooks/paypal` | PayPal, with the signature checked first     |
+
+**Why `/api/requests` survives while the rest were deleted.** It is the runner's only door, and the
+runner needs one thing MCP deliberately cannot give it: the ability to name a _different merchant_.
+`request_purchase` takes an item id from the catalogue, so a stranger's shop is not expressible
+through it. That is the point of the tool, and it is also what the third demo beat tests, so the beat
+keeps its own narrow door rather than the tool growing a hole.
+
+The deleted routes were `GET /api/mandates`, `PATCH /api/mandates/[id]`, `POST /api/decisions/[id]`,
+`GET /api/ledger` and `POST /api/refunds`. Each one duplicated a remote function the dashboard already
+used, and each one was open to any caller. Deleting them removed a widen-an-allowance endpoint, an
+approve-any-pending-request endpoint and a refund-any-capture endpoint, which is a smaller attack
+surface and fewer files.
 
 ## How a person would link a payment method
 
@@ -317,11 +359,52 @@ Two things make that a project rather than an afternoon. Saving a PayPal Wallet 
 account PayPal has approved for vaulting, and PayPal publishes a country list for it that does not
 cover every market. A live app also has to be registered and reviewed, with no expedited route.
 
+## Deploy
+
+`Dockerfile` and `fly.toml` are committed, so the hosted copy is a build, not a setup job. The image
+runs the same code you ran locally.
+
+```bash
+fly launch --no-deploy --copy-config --name inkan   # first time only
+fly secrets import < .env                            # only for a live run
+fly deploy
+```
+
+**Ashburn on purpose.** `primary_region = "iad"` is the code for Ashburn, Virginia, and it is one of
+the seven North American regions that survived Fly's consolidation.
+
+**The smallest machine, suspended when idle.** One shared vCPU, 256 MB, `auto_stop_machines =
+"suspend"` with `min_machines_running = 0`. Suspend saves the machine's memory to disk and resumes in
+a few hundred milliseconds, so the in-memory ledger survives a quiet spell instead of being thrown
+away. A suspended machine costs only storage. Measured before choosing the size: the production
+server peaks at **72 MB RSS** with every route warmed, so 256 MB is about three and a half times what
+it uses.
+
+**No database to provision.** The hosted copy keeps its ledger in the process, so there is no
+Postgres account, no migration step and no connection string. The honest cost is one line: a cold
+start begins a fresh allowance. Deploys, host migrations and failed snapshots all cause one, and the
+app re-seeds itself, so the worst case is a demo that starts over rather than a demo that breaks.
+`DATABASE_URL` is still read, and setting it as a secret moves the ledger to Postgres with no code
+change.
+
+**It deploys without secrets.** `DEMO_MODE` is absent from `fly.toml` on purpose. With no PayPal
+values the image replays the recorded sandbox run, so `fly deploy` produces a working public URL
+before a single secret exists. Add the PayPal secrets and the same image runs live, with no rebuild
+and nothing else to set up.
+
+**It shuts down cleanly.** The server drains in-flight requests on `SIGTERM` within 10 seconds, and
+`kill_timeout` is 15, so an autostop never cuts a request short. Verified: a warm stop takes about a
+second.
+
+The health check is `/api/health`, which is the same tested module the suite asserts, so a green
+deploy means the app answered a real request and not just that the process started.
+
 ## What this does not do
 
 Named on purpose, so the boundary is a decision rather than an omission.
 
 - No authentication. Neither the dashboard nor the MCP endpoint has a login, so this is a demo simplification, not a claim about a product.
+- The ledger is durable only when `DATABASE_URL` is set. Without it the rows live in the process, and a restart begins a fresh allowance.
 - No connect screen. There is no way to add your own payment method or PayPal account; see above for what that needs.
 - No notifications. Nothing tells you a request is waiting; the approval screen has to be open.
 - One merchant, one currency, one agent, one person.
