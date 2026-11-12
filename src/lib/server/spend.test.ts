@@ -92,7 +92,14 @@ function fakePayPal(
 	return { client, calls };
 }
 
-const config = loadConfig({ DEMO_MODE: 'replay', STORE_MERCHANT_ID: PAYEE });
+/**
+ * The money path under test is the live one. A replay never settles, by design, so
+ * the config is built live here and the PayPal client is the only thing faked.
+ */
+const config = {
+	...loadConfig({ DEMO_MODE: 'replay', STORE_MERCHANT_ID: PAYEE }),
+	demoMode: 'live' as const
+};
 
 let store: ReturnType<typeof createMemoryStore>;
 let deps: SpendDeps;

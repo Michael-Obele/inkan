@@ -2,13 +2,11 @@ import * as v from 'valibot';
 import { McpServer } from 'tmcp';
 import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
 import { HttpTransport } from '@tmcp/transport-http';
-import { formatMoney, money, type Money } from '../money';
+import { formatMoney, type Money } from '../money';
 import { app } from './app';
 import { CATALOG } from './catalog';
-import { evaluate } from './policy';
-import { committedSpendCents } from './requests';
 import { currentMandate } from './seed';
-import { mandateTerms, requestPayment, type SpendDeps } from './spend';
+import { requestPayment, type SpendDeps } from './spend';
 
 /**
  * The socket an agent plugs into. Three tools, and none of them can change an
@@ -28,11 +26,6 @@ function show(value: Money | null | undefined): string | null {
 
 function isoDay(date: Date): string {
 	return date.toISOString().slice(0, 10);
-}
-
-/** A tool failure the client shows to the model, so it can correct itself. */
-function refuse(message: string) {
-	return { isError: true as const, content: [{ type: 'text' as const, text: message }] };
 }
 
 /** Per-request facts the tools need. The origin comes from the request, never a constant. */
@@ -58,7 +51,10 @@ export function build(deps: SpendDeps) {
 			const captured = await deps.store.sumCaptured(mandate.id);
 			const refunded = await deps.store.sumRefunded(mandate.id);
 			const spent = captured.cents - refunded.cents;
-			const remaining = Math.max(0, mandate.ceilingCents - spent);
+			// A stopped or expired allowance has nothing left to spend. Reporting the
+			// arithmetic as money available would invite an agent to keep asking.
+			const open = mandate.status === 'active' && mandate.expiresAt.getTime() > Date.now();
+			const remaining = open ? Math.max(0, mandate.ceilingCents - spent) : 0;
 
 			const payload = {
 				purpose: mandate.purpose,
@@ -67,11 +63,11 @@ export function build(deps: SpendDeps) {
 				spent: show({ cents: spent, currency: mandate.ceilingCurrency }),
 				remaining: show({ cents: remaining, currency: mandate.ceilingCurrency }),
 				onePurchaseUpTo: show({
-					cents: Math.min(remaining, mandate.perTransactionCapCents),
+					cents: open ? Math.min(remaining, mandate.perTransactionCapCents) : 0,
 					currency: mandate.perTransactionCapCurrency
 				}),
 				goesThroughWithoutAsking: show({
-					cents: mandate.autoApproveAmountCents,
+					cents: open ? mandate.autoApproveAmountCents : 0,
 					currency: mandate.autoApproveAmountCurrency
 				}),
 				coversCategories: mandate.allowedCategories,
@@ -133,32 +129,6 @@ export function build(deps: SpendDeps) {
 
 			const mandate = await currentMandate(deps.store, deps.config);
 
-			// A recorded run has a fixed sequence of real sandbox answers, so a purchase
-			// that would charge cannot be invented. A refusal and an escalation need no
-			// PayPal call at all, so those still answer honestly with no keys.
-			if (deps.config.demoMode === 'replay') {
-				const captured = await deps.store.sumCaptured(mandate.id);
-				const refunded = await deps.store.sumRefunded(mandate.id);
-				const decision = evaluate({
-					intent: {
-						amount: money(chosen.amountCents),
-						merchantId: deps.config.storeMerchantId,
-						category: chosen.category,
-						recurring: chosen.recurring,
-						description: chosen.name
-					},
-					mandate: mandateTerms(mandate),
-					now: new Date(),
-					committedSpend: money(committedSpendCents(captured.cents, refunded.cents))
-				});
-
-				if (decision.verdict === 'allow') {
-					return refuse(
-						`The rule table allows this, but this server is playing a recorded run, so nothing was charged. Run it with sandbox keys to watch the money move.`
-					);
-				}
-			}
-
 			// SvelteKit gives the endpoint the real request URL, so a link the agent hands
 			// to a person works on localhost, behind a tunnel, or on a deployment.
 			const origin = server.ctx.custom?.origin ?? deps.config.mandateBaseUrl;
@@ -187,7 +157,9 @@ export function build(deps: SpendDeps) {
 								? 'waiting for a person'
 								: result.verdict === 'deny'
 									? 'refused'
-									: 'did not complete',
+									: result.status === 'allowed'
+										? 'allowed, not charged in this recording'
+										: 'did not complete',
 					item: chosen.name,
 					price: formatMoney({ cents: chosen.amountCents, currency: 'USD' }),
 					rule: result.rule,

@@ -50,6 +50,11 @@ export type SpendDeps = {
 	now?: () => Date;
 	/** Called when a capture succeeds, so the receipt writer can run out of band. */
 	onCaptured?: (requestId: string) => void;
+	/**
+	 * Only the recorded scenario sets this. It is the one caller that is allowed to
+	 * settle while the app is replaying a tape, because that is what the tape is.
+	 */
+	recording?: boolean;
 };
 
 /** The path an allowed purchase walks. Each step is ledgered. */
@@ -433,9 +438,9 @@ export async function requestPayment(
 		// payment with no proof.
 		const paidCapture =
 			existing.status === 'captured'
-				? (
-						await deps.store.listLedger(mandate.id)
-					).find((row) => row.spendRequestId === existing.id && row.kind === 'captured')
+				? (await deps.store.listLedger(mandate.id)).find(
+						(row) => row.spendRequestId === existing.id && row.kind === 'captured'
+					)
 				: undefined;
 
 		return {
@@ -527,6 +532,23 @@ export async function requestPayment(
 
 	if (decision.verdict !== 'allow') return result;
 
+	// One rule covers every surface that spends: a recording never settles. It still
+	// writes the real decision to the ledger, and it says plainly that nothing was
+	// charged, rather than failing deep in the tape and blaming PayPal.
+	if (deps.config.demoMode === 'replay' && !deps.recording) {
+		return {
+			...result,
+			status: 'allowed',
+			advice: {
+				action: 'ask_the_person',
+				next: 'The rule table allows this, so a live run would pay it. This run is a recording, so nothing was charged.',
+				mostAllowed: null,
+				approveUrl: null,
+				newAllowanceUrl: null
+			}
+		};
+	}
+
 	const settled = await settle(deps, row.id);
 	if ('captureId' in settled)
 		return {
@@ -593,7 +615,7 @@ export function mandateTerms(row: MandateRow): Mandate {
 		allowedMerchants: row.allowedMerchants,
 		expiresAt: row.expiresAt,
 		status: row.status,
-			// A stored row has no `undefined`, but a hand-built one in a test can.
+		// A stored row has no `undefined`, but a hand-built one in a test can.
 		revokedAt: row.revokedAt ?? null
 	};
 }
