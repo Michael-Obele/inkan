@@ -416,25 +416,7 @@ export async function requestPayment(
 	const refunded = await deps.store.sumRefunded(mandate.id);
 	const committed = money(committedSpendCents(captured.cents, refunded.cents), captured.currency);
 
-	// The same view of the mandate reaches the rule engine and the advice writer, so
-	// the sentence and the verdict cannot disagree about a number.
-	const terms: Mandate = {
-		id: mandate.id,
-		ownerId: mandate.ownerId,
-		agentId: mandate.agentId,
-		purpose: mandate.purpose,
-		allowedCategories: mandate.allowedCategories,
-		ceiling: money(mandate.ceilingCents, mandate.ceilingCurrency),
-		perTransactionCap: money(mandate.perTransactionCapCents, mandate.perTransactionCapCurrency),
-		autoApproveAmount: money(
-			mandate.autoApproveAmountCents,
-			maybeCurrency(mandate.autoApproveAmountCurrency)
-		),
-		allowedMerchants: mandate.allowedMerchants,
-		expiresAt: mandate.expiresAt,
-		status: mandate.status,
-		revokedAt: mandate.revokedAt
-	};
+	const terms = mandateTerms(mandate);
 
 	const existing = await deps.store.findRequestByKey(key);
 	if (existing) {
@@ -446,12 +428,23 @@ export async function requestPayment(
 			reason: existing.reason ?? 'This request was already received.'
 		};
 
+		// A paid request answers with the capture it already has. Without this the
+		// retry claimed `captured` and handed back no capture id, which reads as a
+		// payment with no proof.
+		const paidCapture =
+			existing.status === 'captured'
+				? (
+						await deps.store.listLedger(mandate.id)
+					).find((row) => row.spendRequestId === existing.id && row.kind === 'captured')
+				: undefined;
+
 		return {
 			requestId: existing.id,
 			status: existing.status as RequestStatus,
 			verdict: remembered.verdict,
 			rule: remembered.rule,
 			reason: remembered.reason,
+			captureId: paidCapture?.paypalId ?? undefined,
 			advice: advise({
 				decision: remembered,
 				intent,
@@ -578,6 +571,31 @@ function renewUrl(config: Config): string {
 
 function maybeCurrency(value: string | null | undefined): string {
 	return value ?? 'USD';
+}
+
+/**
+ * One mapping from the stored row to the record the rule engine reads, so the
+ * engine and the advice writer cannot disagree about a number.
+ */
+export function mandateTerms(row: MandateRow): Mandate {
+	return {
+		id: row.id,
+		ownerId: row.ownerId,
+		agentId: row.agentId,
+		purpose: row.purpose,
+		allowedCategories: row.allowedCategories,
+		ceiling: money(row.ceilingCents, row.ceilingCurrency),
+		perTransactionCap: money(row.perTransactionCapCents, row.perTransactionCapCurrency),
+		autoApproveAmount: money(
+			row.autoApproveAmountCents,
+			maybeCurrency(row.autoApproveAmountCurrency)
+		),
+		allowedMerchants: row.allowedMerchants,
+		expiresAt: row.expiresAt,
+		status: row.status,
+			// A stored row has no `undefined`, but a hand-built one in a test can.
+		revokedAt: row.revokedAt ?? null
+	};
 }
 
 let shared: CapabilityStore | null = null;

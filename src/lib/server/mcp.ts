@@ -2,11 +2,13 @@ import * as v from 'valibot';
 import { McpServer } from 'tmcp';
 import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
 import { HttpTransport } from '@tmcp/transport-http';
-import { formatMoney, type Money } from '../money';
+import { formatMoney, money, type Money } from '../money';
 import { app } from './app';
 import { CATALOG } from './catalog';
+import { evaluate } from './policy';
+import { committedSpendCents } from './requests';
 import { currentMandate } from './seed';
-import { requestPayment, type SpendDeps } from './spend';
+import { mandateTerms, requestPayment, type SpendDeps } from './spend';
 
 /**
  * The socket an agent plugs into. Three tools, and none of them can change an
@@ -26,6 +28,11 @@ function show(value: Money | null | undefined): string | null {
 
 function isoDay(date: Date): string {
 	return date.toISOString().slice(0, 10);
+}
+
+/** A tool failure the client shows to the model, so it can correct itself. */
+function refuse(message: string) {
+	return { isError: true as const, content: [{ type: 'text' as const, text: message }] };
 }
 
 /** Per-request facts the tools need. The origin comes from the request, never a constant. */
@@ -124,21 +131,33 @@ export function build(deps: SpendDeps) {
 				};
 			}
 
-			// The recorded preview is a fixed sequence of real answers, so a new
-			// purchase would put the tape out of order rather than answer honestly.
-			if (deps.config.demoMode === 'replay') {
-				return {
-					isError: true,
-					content: [
-						{
-							type: 'text',
-							text: 'This server is showing a recorded run, so it cannot start a new purchase. Run it with sandbox keys to ask for real.'
-						}
-					]
-				};
-			}
-
 			const mandate = await currentMandate(deps.store, deps.config);
+
+			// A recorded run has a fixed sequence of real sandbox answers, so a purchase
+			// that would charge cannot be invented. A refusal and an escalation need no
+			// PayPal call at all, so those still answer honestly with no keys.
+			if (deps.config.demoMode === 'replay') {
+				const captured = await deps.store.sumCaptured(mandate.id);
+				const refunded = await deps.store.sumRefunded(mandate.id);
+				const decision = evaluate({
+					intent: {
+						amount: money(chosen.amountCents),
+						merchantId: deps.config.storeMerchantId,
+						category: chosen.category,
+						recurring: chosen.recurring,
+						description: chosen.name
+					},
+					mandate: mandateTerms(mandate),
+					now: new Date(),
+					committedSpend: money(committedSpendCents(captured.cents, refunded.cents))
+				});
+
+				if (decision.verdict === 'allow') {
+					return refuse(
+						`The rule table allows this, but this server is playing a recorded run, so nothing was charged. Run it with sandbox keys to watch the money move.`
+					);
+				}
+			}
 
 			// SvelteKit gives the endpoint the real request URL, so a link the agent hands
 			// to a person works on localhost, behind a tunnel, or on a deployment.
@@ -160,8 +179,9 @@ export function build(deps: SpendDeps) {
 
 				const payload = {
 					requestId: result.requestId,
+					// "paid" is a claim about money, so it needs the capture id that proves it.
 					outcome:
-						result.status === 'captured'
+						result.status === 'captured' && result.captureId
 							? 'paid'
 							: result.status === 'pending'
 								? 'waiting for a person'

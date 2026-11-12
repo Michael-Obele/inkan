@@ -93,7 +93,15 @@ export function createReplayClient(tape: Tape): PayPalClient {
 		getOrder: async () => next<OrderView>('getOrder'),
 		confirmPaymentSource: async () => next<OrderView>('confirmPaymentSource'),
 		authorizeOrder: async () => next<OrderView>('authorizeOrder'),
-		captureAuthorization: async () => next<Captured>('captureAuthorization'),
+		captureAuthorization: async () => {
+			const captured = await next<Captured>('captureAuthorization');
+			// A capture with no id is not a capture, and the caller would report money
+			// moved without proof. Refuse it here rather than downstream.
+			if (!captured?.captureId) {
+				throw new TapeMismatchError('a capture id', 'a recorded capture without one');
+			}
+			return captured;
+		},
 		voidAuthorization: async () => {
 			next<null>('voidAuthorization');
 		},

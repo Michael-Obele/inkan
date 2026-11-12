@@ -45,7 +45,16 @@ function required(source: EnvSource, name: string): string {
 }
 
 export function loadConfig(source: EnvSource = process.env): Config {
-	const demoMode = source.DEMO_MODE === 'replay' ? 'replay' : 'live';
+	// A judge with no keys and no database gets the recorded run automatically, so
+	// `bun run dev` works on a fresh clone. Set DEMO_MODE=live to require real keys.
+	const demoMode: 'live' | 'replay' =
+		source.DEMO_MODE === 'replay'
+			? 'replay'
+			: source.DEMO_MODE === 'live'
+				? 'live'
+				: source.DATABASE_URL
+					? 'live'
+					: 'replay';
 
 	// A replay needs no credentials at all, which is the whole point of it.
 	if (demoMode === 'replay') {
