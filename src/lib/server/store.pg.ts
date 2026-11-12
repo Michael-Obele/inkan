@@ -7,11 +7,20 @@ import { money, type Money } from '../money';
 import type { Store, SpendRequestPatch } from './store';
 
 /**
+ * Neon's dashboard gives the connection string in quotes, and some launchers pass
+ * those quotes through as part of the value. A quoted URL is not a URL, so it is
+ * cleaned here rather than failing with an unreadable driver error on deploy.
+ */
+function cleanUrl(raw: string): string {
+	return raw.trim().replace(/^["']|["']$/g, '');
+}
+
+/**
  * Built from a connection string rather than `$app/env/private`, so this module
  * can be exercised by a plain script as well as by the app.
  */
 export function createPgStore(databaseUrl: string): Store {
-	const client = neon(databaseUrl);
+	const client = neon(cleanUrl(databaseUrl));
 	const db = drizzle(client, { schema });
 
 	return {

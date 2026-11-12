@@ -12,6 +12,7 @@ import type { SpendDeps } from './spend';
 import type { Store } from './store';
 import { recordedTape } from './paypal/recorded';
 import { writeReceipt } from './receipts';
+import { serviceLog } from './log';
 
 type Wiring = SpendDeps & { store: Store; config: Config; tape: Tape | null };
 
@@ -57,9 +58,15 @@ export async function app(): Promise<Wiring> {
 		paypal = createReplayClient(tape ?? emptyTape());
 		await seedReplay(store, config);
 	} else {
-		if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
-		store = createPgStore(env.DATABASE_URL);
+		// A live run does not need a database. The ledger lives in this process, which is
+		// enough for a judging session and asks nobody to create an account. Postgres is
+		// used the moment it is configured, and the store interface is identical either way.
+		store = env.DATABASE_URL ? createPgStore(env.DATABASE_URL) : createMemoryStore();
 		paypal = createPayPalClient(config);
+
+		if (!env.DATABASE_URL) {
+			serviceLog('no DATABASE_URL, so the ledger lives in this process and resets on restart');
+		}
 	}
 
 	const wiring: Wiring = {
@@ -78,7 +85,7 @@ export async function app(): Promise<Wiring> {
 	};
 
 	// The preview has to fill its own ledger, and only a recorded run can do that honestly.
-	if (config.demoMode === 'replay') await runScenario(wiring);
+	if (config.demoMode === 'replay') await runScenario({ ...wiring, recording: true });
 
 	return wired;
 }

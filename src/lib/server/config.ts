@@ -45,14 +45,19 @@ function required(source: EnvSource, name: string): string {
 }
 
 export function loadConfig(source: EnvSource = process.env): Config {
-	// A judge with no keys and no database gets the recorded run automatically, so
-	// `bun run dev` works on a fresh clone. Set DEMO_MODE=live to require real keys.
+	// The mode follows what the app can actually do. A live run needs credentials
+	// that can move money; it does not need a database, because the ledger can live
+	// in the process. A clone with no keys replays the recorded run, which is what
+	// lets a judge see the whole story without setting anything up.
+	const canPay = Boolean(
+		source.PAYPAL_CLIENT_ID && source.PAYPAL_CLIENT_SECRET && source.STORE_MERCHANT_ID
+	);
 	const demoMode: 'live' | 'replay' =
 		source.DEMO_MODE === 'replay'
 			? 'replay'
 			: source.DEMO_MODE === 'live'
 				? 'live'
-				: source.DATABASE_URL
+				: canPay
 					? 'live'
 					: 'replay';
 
