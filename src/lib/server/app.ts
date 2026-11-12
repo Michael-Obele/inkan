@@ -11,6 +11,7 @@ import { runScenario } from './preview';
 import type { SpendDeps } from './spend';
 import type { Store } from './store';
 import { recordedTape } from './paypal/recorded';
+import { writeReceipt } from './receipts';
 
 type Wiring = SpendDeps & { store: Store; config: Config; tape: Tape | null };
 
@@ -61,16 +62,23 @@ export async function app(): Promise<Wiring> {
 		paypal = createPayPalClient(config);
 	}
 
-	wired = {
+	const wiring: Wiring = {
 		store,
 		paypal,
 		capabilities: sharedCapabilities(config.capabilityTtlSeconds),
 		config,
 		tape
 	};
+	wired = wiring;
+
+	// Written after the money has moved, so a slow or absent model can never delay or
+	// fail a capture. A missing key falls back to the template inside writeReceipt.
+	wiring.onCaptured = (requestId) => {
+		void writeReceipt(wiring, { spendRequestId: requestId }).catch(() => {});
+	};
 
 	// The preview has to fill its own ledger, and only a recorded run can do that honestly.
-	if (config.demoMode === 'replay') await runScenario(wired);
+	if (config.demoMode === 'replay') await runScenario(wiring);
 
 	return wired;
 }

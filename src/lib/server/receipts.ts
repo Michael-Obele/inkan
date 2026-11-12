@@ -7,7 +7,6 @@ import { amountOf, type Store } from './store';
  * template writes the same facts instead, and the model name says so.
  */
 export type ReceiptInput = {
-	mandateId: string;
 	spendRequestId: string;
 };
 

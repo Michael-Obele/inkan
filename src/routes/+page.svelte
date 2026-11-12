@@ -32,7 +32,7 @@
 	const numbers = [
 		{ figure: '9', label: 'rules, fixed order' },
 		{ figure: '13', label: 'adversarial cases, all held' },
-		{ figure: '107', label: 'tests' },
+		{ figure: '133', label: 'tests' },
 		{ figure: '0', label: 'model calls on a refusal' }
 	];
 

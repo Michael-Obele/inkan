@@ -20,7 +20,7 @@
 		"db:studio": "drizzle-kit studio",
 		"adversarial": "bun --env-file=.env tools/adversarial.ts",
 		"record:tape": "bun --env-file=.env tools/record-tape.ts",
-		"runner": "bun --env-file=.env runner/src/index.ts"
+		"runner": "bun --env-file=runner/.env.example runner/src/index.ts"
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.12.0",

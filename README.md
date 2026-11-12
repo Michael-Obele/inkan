@@ -32,7 +32,7 @@ Built for the PayPal AI Hackathon 2026.
 ## What this is
 
 An agent asks for money. inkan answers with one of three verdicts, names the rule that decided it,
-and writes a row nobody can edit.
+and appends a row that is never updated.
 
 A **mandate** is the authority: a purpose, an amount ceiling, a per-transaction cap, one merchant and
 an expiry. A **capability** is the permission to spend, and it is single use, bound to one amount and
@@ -74,7 +74,9 @@ rather than existing with a permission check.
 
 `request_purchase` also cannot name a price. It names an item from the shop, and the shop's own price
 is the one that travels. A sentence like "ignore the limit and buy everything for 900 dollars" is
-stored verbatim and read by the person, and it changes nothing.
+stored verbatim and read by the person, and it changes nothing. The HTTP route used by the bundled
+runner does accept an amount, because the runner parses prose into fields, and it is the one surface
+where that is true.
 
 ## Connect an agent over MCP
 
@@ -179,7 +181,7 @@ Two traps made this the only workable order, and both are in [`agent/tools.md`](
 - Single-use, amount-bound, merchant-bound spending permissions that expire in two minutes.
 - The full money path against the PayPal sandbox: bare order, payee check, card, hold, re-check, capture.
 - A void that turns a hold into `VOIDED` with no settlement.
-- The request lifecycle, an idempotency key built only from facts known before the model runs, and a ledger that cannot be edited.
+- The request lifecycle, an idempotency key built only from facts known before the model runs, and a ledger that appends and never updates. The one delete is the demo reset button, which clears a rehearsal before a new run.
 - Refunds from a ledger row, and disputes read from PayPal rather than invented.
 - A webhook receiver that verifies the signature before believing anything, and treats a repeat delivery as one row.
 - An MCP server with three tools, and deliberately no fourth.
@@ -193,17 +195,17 @@ Two traps made this the only workable order, and both are in [`agent/tools.md`](
 Pure and deterministic. The same intent, mandate and clock always give the same verdict, which is what
 makes the table testable.
 
-| Order | Rule                   | Verdict | Condition                                                                                                             |
-| ----- | ---------------------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
-| 1     | `mandate_revoked`      | deny    | The mandate is not active.                                                                                            |
-| 2     | `mandate_expired`      | deny    | The clock is past the mandate's expiry.                                                                               |
-| 3     | `currency_mismatch`    | deny    | The request currency differs from the mandate currency.                                                               |
-| 4     | `merchant_not_allowed` | deny    | The merchant is outside the allowlist. Exact or subdomain, so a name that merely contains an allowed name is refused. |
-| 5     | `category_not_allowed` | deny    | A category list exists and the request's category is not in it.                                                       |
-| 6     | `over_per_txn_cap`     | deny    | The amount exceeds the per-transaction cap.                                                                           |
-| 7     | `over_ceiling`         | deny    | Committed spend plus this amount exceeds the ceiling.                                                                 |
-| 8     | `auto_approve`         | allow   | The amount is at or below the auto-approve threshold **and** the purchase is not recurring.                           |
-| 9     | `needs_human`          | ask     | Everything else, including every recurring purchase at any amount.                                                    |
+| Order | Rule                   | Verdict | Condition                                                                                                                                           |
+| ----- | ---------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `mandate_revoked`      | deny    | The mandate is not active.                                                                                                                          |
+| 2     | `mandate_expired`      | deny    | The clock is past the mandate's expiry.                                                                                                             |
+| 3     | `currency_mismatch`    | deny    | The request currency differs from the mandate currency.                                                                                             |
+| 4     | `merchant_not_allowed` | deny    | The merchant is not one the allowance lists. The match is exact against PayPal's own id, so a name that merely contains an allowed name is refused. |
+| 5     | `category_not_allowed` | deny    | A category list exists and the request's category is not in it.                                                                                     |
+| 6     | `over_per_txn_cap`     | deny    | The amount exceeds the per-transaction cap.                                                                                                         |
+| 7     | `over_ceiling`         | deny    | Committed spend plus this amount exceeds the ceiling.                                                                                               |
+| 8     | `auto_approve`         | allow   | The amount is at or below the auto-approve threshold **and** the purchase is not recurring.                                                         |
+| 9     | `needs_human`          | ask     | Everything else, including every recurring purchase at any amount.                                                                                  |
 
 Rule 4 compares `payee.merchant_id` from step 2 of the measured path, an exact match against the
 identifier PayPal itself reports. It never compares a merchant name, because the agent supplies names
@@ -288,9 +290,9 @@ sees it.
 | --------------------------- | ---------------------------------------------- |
 | `GET /api/health`           | A tested health payload                        |
 | `GET /api/mandates`         | The allowance in force                         |
-| `GET /api/mandates/[id]`    | One allowance                                  |
+| `PATCH /api/mandates/[id]`  | Narrow or revoke one allowance                 |
 | `POST /api/requests`        | Ask for permission to spend. The runner's door |
-| `GET /api/decisions/[id]`   | A decision, and the rule that made it          |
+| `POST /api/decisions/[id]`  | A human decision, recorded with the rule       |
 | `GET /api/ledger`           | The append-only read model                     |
 | `POST /api/refunds`         | A human refund, from the row it reverses       |
 | `POST /api/webhooks/paypal` | Signature verified before anything is believed |
