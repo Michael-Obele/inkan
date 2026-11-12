@@ -111,28 +111,39 @@
 				an expiry. It asks. A rule table answers. You can read every attempt, and stop it.
 			</p>
 
-			<div class="mt-9 max-w-xl">
-				<CommandBlock
-					label="Run it locally"
-					lines={[
-						'git clone https://github.com/Michael-Obele/inkan.git',
-						'cd inkan && bun install',
-						'DEMO_MODE=replay bun dev'
-					]}
-				/>
-			</div>
-
-			<div class="mt-6 flex flex-wrap items-center gap-3">
+			<div class="mt-9 flex flex-wrap items-center gap-3">
 				<Button href="/allowance" size="lg">
 					Open the allowance
 					<ArrowRight class="size-3.5" />
 				</Button>
-				<Button href="/demo" variant="outline" size="lg">Run the four beats</Button>
+				<Button href="/demo" variant="outline" size="lg">Run the demo</Button>
 			</div>
 
 			<p class="mt-6 text-[0.8125rem] text-muted-foreground">
-				Sandbox only. The replay needs no keys and no database.
+				Sandbox only. This site runs the live sandbox; the replay needs no keys and no database.
 			</p>
+
+			<details class="mt-8 max-w-xl">
+				<summary
+					class="cursor-pointer text-[0.8125rem] text-muted-foreground underline underline-offset-4 hover:text-foreground"
+				>
+					Run it yourself, offline
+				</summary>
+				<div class="mt-4">
+					<CommandBlock
+						label="No keys, no database"
+						lines={[
+							'git clone https://github.com/Michael-Obele/inkan.git',
+							'cd inkan && bun install',
+							'bun run dev'
+						]}
+					/>
+					<p class="mt-3 text-[0.8125rem] text-muted-foreground">
+						A clone with no <code class="font-mono">.env</code> replays the recorded sandbox run, so every
+						screen works before you configure anything.
+					</p>
+				</div>
+			</details>
 		</div>
 	</section>
 

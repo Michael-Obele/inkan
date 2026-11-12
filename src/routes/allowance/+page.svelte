@@ -184,6 +184,7 @@
 					<Receipt class="size-3.5" />
 					See what it bought
 				</Button>
+				<Button variant="outline" href="/allowance/new">Issue a new allowance</Button>
 			</div>
 		</div>
 
@@ -371,8 +372,6 @@
 					<CircleCheck class="size-3.5" />
 					{formatMoney(data.spent)} of {formatMoney(data.mandate.ceiling)} is already committed.
 				</p>
-
-				<Button variant="outline" class="w-fit" href="/allowance/new">Issue a new allowance</Button>
 			{/if}
 		</div>
 

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { ArrowLeft, ArrowRight, Clock, ShieldCheck } from '@lucide/svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -26,12 +25,14 @@
 				error = result.error;
 				return;
 			}
-			// A recording says so and stays on the card, so the reason is readable.
-			if (result.note) {
-				note = result.note;
-				return;
-			}
-			await goto('/ledger');
+
+			// Stay on the card. Pressing the most important button in the product should
+			// confirm what happened, not quietly change the page.
+			note =
+				result.note ??
+				(result.status === 'captured'
+					? `Allowed. PayPal captured it${result.captureId ? ` as ${result.captureId}` : ''}.`
+					: 'Refused. Nothing was held and nothing was charged.');
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'the service did not answer';
 		} finally {

@@ -8,9 +8,9 @@
 
 	const links = [
 		{ href: '/allowance', label: 'Allowance' },
-		{ href: '/demo', label: 'Agent' },
-		{ href: '/ledger', label: 'Ledger' },
-		{ href: '/store', label: 'Shop' }
+		{ href: '/demo', label: 'Demo' },
+		{ href: '/approve', label: 'Approvals' },
+		{ href: '/ledger', label: 'Ledger' }
 	];
 
 	/** The wordmark is home. The nav is the product, never the front door. */

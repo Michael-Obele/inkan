@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import {
 		ArrowRight,
@@ -14,6 +16,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
+	import CommandBlock from '#lib/components/command-block.svelte';
 	import StatusPill from '#lib/components/status-pill.svelte';
 	import { formatMoney } from '#lib/money';
 	import { askTheAgent, getAgentConsole, resetTheDemo, runBeatNow } from '#lib/remote';
@@ -136,6 +139,31 @@
 			.filter((row) => row.answer?.actual === 'waiting')
 	);
 
+	/** Counted, never asserted, so the summary cannot disagree with the beats above it. */
+	const tally = $derived.by(() => {
+		const counts = { paid: 0, waiting: 0, refused: 0, untouched: 0 };
+		for (const beat of data.beats) {
+			const answer = seen(beat);
+			if (!answer) counts.untouched += 1;
+			else counts[answer.actual] += 1;
+		}
+		return counts;
+	});
+
+	const tallyLine = $derived(
+		[
+			tally.paid ? `${tally.paid} paid` : '',
+			tally.waiting ? `${tally.waiting} waiting for you` : '',
+			tally.refused ? `${tally.refused} refused` : '',
+			tally.untouched ? `${tally.untouched} not attempted` : ''
+		]
+			.filter(Boolean)
+			.join(', ')
+	);
+
+	/** The card a person has to act on, so the end of a run can point at it. */
+	let reviewCard = $state<HTMLElement | null>(null);
+
 	async function run(stepId: string, drivenByAll = false) {
 		if (!drivenByAll) busy = stepId;
 		error = null;
@@ -170,6 +198,11 @@
 		}
 		busy = null;
 		ranAll = true;
+
+		// A run ends on the thing a person is supposed to do, not on a summary that points
+		// somewhere else. The card renders above this list, so it has to be brought down.
+		await tick();
+		reviewCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 	}
 
 	async function reset() {
@@ -295,24 +328,27 @@
 	</Card.Root>
 
 	{#if waiting.length > 0}
-		<Card.Root class="mt-8 border-l-2 border-l-warning">
-			<Card.Header>
-				<StatusPill tone="warning" label="A person is needed" />
-				<Card.Title class="font-heading text-xl">The agent is stopped, waiting for you</Card.Title>
-				<Card.Description>
-					Nothing is held and nothing is charged. One request crossed the line that only a human may
-					cross, so it sits until you decide.
-				</Card.Description>
-			</Card.Header>
-			<Card.Content class="flex flex-wrap gap-3">
-				{#each waiting as row (row.beat.id)}
-					<Button href="/approve/{row.answer?.requestId}">
-						Review {formatMoney(row.beat.amount)}
-						<ArrowRight class="size-3.5" />
-					</Button>
-				{/each}
-			</Card.Content>
-		</Card.Root>
+		<div class="mt-8" bind:this={reviewCard}>
+			<Card.Root class="border-l-2 border-l-warning">
+				<Card.Header>
+					<StatusPill tone="warning" label="A person is needed" />
+					<Card.Title class="font-heading text-xl">The agent is stopped, waiting for you</Card.Title
+					>
+					<Card.Description>
+						Nothing is held and nothing is charged. One request crossed the line that only a human
+						may cross, so it sits until you decide.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content class="flex flex-wrap gap-3">
+					{#each waiting as row (row.beat.id)}
+						<Button href="/approve/{row.answer?.requestId}">
+							Review {formatMoney(row.beat.amount)}
+							<ArrowRight class="size-3.5" />
+						</Button>
+					{/each}
+				</Card.Content>
+			</Card.Root>
+		</div>
 	{/if}
 
 	<div class="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
@@ -400,13 +436,19 @@
 				<div
 					class="mt-2 flex flex-wrap items-center justify-between gap-3 border border-border bg-muted/40 px-4 py-3"
 				>
-					<p class="text-sm text-muted-foreground">
-						Four attempts, three refusals, one that needed a person. Every one is in the ledger.
-					</p>
-					<Button size="sm" variant="link" onclick={() => goto('/ledger')}>
-						Read the ledger
-						<ArrowRight class="size-3" />
-					</Button>
+					<p class="text-sm text-muted-foreground">{tallyLine}. Every one is in the ledger.</p>
+					<div class="flex flex-wrap items-center gap-3">
+						{#if waiting.length > 0 && waiting[0].answer}
+							<Button size="sm" href="/approve/{waiting[0].answer.requestId}">
+								Review {formatMoney(waiting[0].beat.amount)}
+								<ArrowRight class="size-3" />
+							</Button>
+						{/if}
+						<Button size="sm" variant="link" onclick={() => goto('/ledger')}>
+							Read the ledger
+							<ArrowRight class="size-3" />
+						</Button>
+					</div>
 				</div>
 			{/if}
 		</section>
@@ -531,4 +573,42 @@
 			{/if}
 		</aside>
 	</div>
+
+	<section class="mt-12 border-t border-border pt-10">
+		<h2 class="eyebrow">The agent surface</h2>
+		<p class="mt-3 max-w-2xl text-pretty text-muted-foreground">
+			This page is a console for you. A real agent does not use it: it connects over MCP and gets
+			three tools, none of which can grant, widen or revoke an allowance.
+		</p>
+
+		<dl class="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-3">
+			<div class="flex flex-col gap-1 border-t border-border pt-3">
+				<dt class="font-mono text-xs">get_allowance</dt>
+				<dd class="text-sm text-muted-foreground">
+					The terms, what is left, and the items this shop sells.
+				</dd>
+			</div>
+			<div class="flex flex-col gap-1 border-t border-border pt-3">
+				<dt class="font-mono text-xs">request_purchase</dt>
+				<dd class="text-sm text-muted-foreground">
+					One item by id. It cannot name a price, and the reply carries the fix.
+				</dd>
+			</div>
+			<div class="flex flex-col gap-1 border-t border-border pt-3">
+				<dt class="font-mono text-xs">read_ledger</dt>
+				<dd class="text-sm text-muted-foreground">
+					The newest rows, refusals included, so it does not ask twice.
+				</dd>
+			</div>
+		</dl>
+
+		<div class="mt-6 max-w-xl">
+			<CommandBlock label="Streamable HTTP endpoint" lines={[`${page.url.origin}/api/mcp`]} />
+		</div>
+
+		<p class="mt-4 max-w-2xl text-sm text-muted-foreground">
+			<code class="font-mono text-xs">.vscode/mcp.json</code> is committed, so VS Code asks once and then
+			connects. Any other MCP client takes the same URL.
+		</p>
+	</section>
 </main>

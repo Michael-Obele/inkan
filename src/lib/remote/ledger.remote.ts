@@ -24,6 +24,17 @@ export const getLedger = query(async () => {
 		if (receipt) receipts.set(request.id, receipt.text);
 	}
 
+	// One receipt per purchase, on the row a reader hits first. The rows arrive newest
+	// first, so that is the outcome row: captured, escalated or refused. Repeating the
+	// sentence on every row of the same request made one payment read as four.
+	const receiptRowFor = new Map<string, string>();
+	for (const row of ledger) {
+		if (!row.spendRequestId) continue;
+		if (!receipts.has(row.spendRequestId)) continue;
+		if (receiptRowFor.has(row.spendRequestId)) continue;
+		receiptRowFor.set(row.spendRequestId, row.id);
+	}
+
 	let capturedCents = 0;
 	let refundedCents = 0;
 	for (const row of live) {
@@ -56,7 +67,10 @@ export const getLedger = query(async () => {
 			merchantId: row.merchantId,
 			paypalId: row.paypalId,
 			spendRequestId: row.spendRequestId,
-			receipt: row.spendRequestId ? (receipts.get(row.spendRequestId) ?? null) : null,
+			receipt:
+				row.spendRequestId && receiptRowFor.get(row.spendRequestId) === row.id
+					? (receipts.get(row.spendRequestId) ?? null)
+					: null,
 			canRefund:
 				row.kind === 'captured' && !alreadyRefunded.has(row.spendRequestId) && row.paypalId !== null
 		})),
